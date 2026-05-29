@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Beş Taş</string>
+    <string name="play_vs_ai">Yapay Zekaya Karşı</string>
+    <string name="play_local">Yerel İki Kişi</string>
+    <string name="play_online">Online Oyna</string>
+    <string name="settings">Ayarlar</string>
+    <string name="leaderboard">Sıralama</string>
+    <string name="stone_style">Taş Stili</string>
+    <string name="stone_realistic">Gerçekçi Taş</string>
+    <string name="stone_pistachio">Fıstık</string>
+    <string name="player_1">Oyuncu 1</string>
+    <string name="player_2">Oyuncu 2</string>
+    <string name="your_turn">Senin Sıran</string>
+    <string name="opponent_turn">Rakibin Sırası</string>
+    <string name="you_win">Kazandın!</string>
+    <string name="you_lose">Kaybettin!</string>
+    <string name="round_ones">Birler</string>
+    <string name="round_twos">İkiler</string>
+    <string name="round_threes">Üçler</string>
+    <string name="round_fours">Dörtler</string>
+    <string name="round_bridge">Köprü</string>
+</resources>
