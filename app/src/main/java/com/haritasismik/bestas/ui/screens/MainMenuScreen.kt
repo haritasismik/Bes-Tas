@@ -17,7 +17,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.haritasismik.bestas.game.models.GameMode
-import com.haritasismik.bestas.ui.components.EaseInOutSine
 import com.haritasismik.bestas.ui.theme.*
 
 @Composable
@@ -31,7 +30,7 @@ fun MainMenuScreen(
         initialValue = 1f,
         targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOutSine),
+            animation = tween(2000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "title_scale"

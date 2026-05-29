@@ -39,6 +39,7 @@ fun GameBoard(
 
     // Taş seçim animasyonu
     val infiniteTransition = rememberInfiniteTransition(label = "stone_anim")
+    @Suppress("UNUSED_VARIABLE")
     val selectedGlow by infiniteTransition.animateFloat(
         initialValue = 0.3f,
         targetValue = 0.8f,
