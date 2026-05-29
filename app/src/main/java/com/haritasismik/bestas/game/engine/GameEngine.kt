@@ -14,9 +14,9 @@ class GameEngine {
         const val BOARD_WIDTH = 1000f
         const val BOARD_HEIGHT = 1400f
         const val STONE_SIZE = 60f
-        const val CATCH_TOLERANCE = 80f  // Yakalama toleransı (piksel)
-        const val SCATTER_AREA_X = 200f..800f
-        const val SCATTER_AREA_Y = 600f..1100f
+        const val CATCH_TOLERANCE = 80f
+        val SCATTER_AREA_X = 200f..800f
+        val SCATTER_AREA_Y = 600f..1100f
     }
 
     /**
