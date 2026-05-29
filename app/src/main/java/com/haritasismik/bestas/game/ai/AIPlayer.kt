@@ -49,9 +49,10 @@ class AIPlayer(
      */
     fun chooseStonesToPick(state: GameState): List<Int> {
         val availableStones = state.stones.filter { !it.isPickedUp && !it.isInAir }
-        val pickCount = state.currentRound.pickCount
+        if (availableStones.isEmpty()) return emptyList()
 
-        if (availableStones.size < pickCount) return emptyList()
+        // Toplanması gereken: tur sayısı kadar, ama yerde daha az varsa hepsi
+        val pickCount = minOf(state.currentRound.pickCount.coerceAtLeast(1), availableStones.size)
 
         return when (difficulty) {
             AIDifficulty.EASY -> {

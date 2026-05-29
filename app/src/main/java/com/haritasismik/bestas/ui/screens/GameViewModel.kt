@@ -61,6 +61,8 @@ class GameViewModel : ViewModel() {
 
         val stone = state.stones.find { it.id == stoneId } ?: return
         if (stone.isPickedUp) return
+        // Havadaki kapçık tekrar seçilemez
+        if (stone.isInAir) return
 
         if (state.thrownStone == null) {
             // Henüz taş atılmadı - bu taşı seç fırlatmak için
@@ -75,7 +77,9 @@ class GameViewModel : ViewModel() {
                 selectedStones.add(stoneId)
             }
 
-            val needed = state.currentRound.pickCount
+            // Yerde toplanabilir taş sayısı (kapçık hariç)
+            val groundCount = state.stones.count { !it.isPickedUp && !it.isInAir }
+            val needed = minOf(state.currentRound.pickCount.coerceAtLeast(1), groundCount)
             _message.value = "${selectedStones.size}/$needed taş seçildi"
 
             if (selectedStones.size == needed) {
@@ -105,7 +109,8 @@ class GameViewModel : ViewModel() {
         _gameState.value = newState
         selectedStones.clear()
 
-        val needed = state.currentRound.pickCount
+        val groundCount = newState.stones.count { !it.isPickedUp && !it.isInAir }
+        val needed = minOf(newState.currentRound.pickCount.coerceAtLeast(1), groundCount)
         _message.value = "Şimdi $needed taş seç ve topla!"
     }
 
@@ -182,55 +187,64 @@ class GameViewModel : ViewModel() {
 
     private fun performAITurn() {
         viewModelScope.launch {
-            _message.value = "Yapay Zeka düşünüyor..."
+            // AI başarısız olana veya oyunu bitirene kadar oynar
+            while (true) {
+                val state = _gameState.value
+                if (state.isGameOver || state.isPlayer1Turn) return@launch
 
-            aiPlayer.thinkingDelay()
+                _message.value = "Yapay Zeka düşünüyor..."
+                aiPlayer.thinkingDelay()
 
-            val state = _gameState.value
-            if (state.isGameOver) return@launch
+                // 1) Taş fırlat
+                val stoneToThrow = aiPlayer.chooseStoneToThrow(state)
+                val afterThrow = engine.throwStone(state, stoneToThrow)
+                _gameState.value = afterThrow
+                delay(500)
 
-            // AI taş seçer ve fırlatır
-            val stoneToThrow = aiPlayer.chooseStoneToThrow(state)
-            val stateAfterThrow = engine.throwStone(state, stoneToThrow)
-            _gameState.value = stateAfterThrow
+                // Bu hamle başarılı mı? (zorluk seviyesine göre)
+                if (!aiPlayer.isMoveSucessful()) {
+                    val failState = engine.failMove(afterThrow)
+                    _gameState.value = failState
+                    _message.value = "Yapay Zeka şaşırdı! Senin sıran. 🎯"
+                    return@launch
+                }
 
-            delay(500)
+                // 2) Yerden taş topla
+                val stonesToPick = aiPlayer.chooseStonesToPick(afterThrow)
+                if (stonesToPick.isEmpty()) {
+                    val failState = engine.failMove(afterThrow)
+                    _gameState.value = failState
+                    _message.value = "Yapay Zeka şaşırdı! Senin sıran. 🎯"
+                    return@launch
+                }
 
-            // AI taşları toplar
-            val stonesToPick = aiPlayer.chooseStonesToPick(stateAfterThrow)
-            if (stonesToPick.isNotEmpty() && aiPlayer.isMoveSucessful()) {
-                val (stateAfterPick, pickResult) = engine.pickUpStones(stateAfterThrow, stonesToPick)
-
+                val (afterPick, pickResult) = engine.pickUpStones(afterThrow, stonesToPick)
+                _gameState.value = afterPick
                 delay(300)
 
-                // AI havadaki taşı yakalar
-                if (aiPlayer.isMoveSucessful()) {
-                    val (finalState, _) = engine.catchStone(stateAfterPick, Position(500f, 500f))
-                    _gameState.value = finalState
-
-                    if (finalState.isGameOver) {
-                        _message.value = "Yapay Zeka kazandı!"
-                    } else if (pickResult == MoveResult.ROUND_COMPLETE) {
-                        _message.value = "AI tur tamamladı! Sonraki: ${finalState.currentRound.displayName}"
-                        // AI devam eder
+                when (pickResult) {
+                    MoveResult.ROUND_COMPLETE -> {
+                        if (afterPick.isGameOver) {
+                            _message.value = "Yapay Zeka kazandı! 🏆"
+                            return@launch
+                        }
+                        _message.value = "Yapay Zeka turu geçti! Sıradaki: ${afterPick.currentRound.displayName}"
                         delay(800)
-                        performAITurn()
-                    } else {
-                        // AI devam eder
-                        delay(500)
-                        performAITurn()
+                        // Döngü devam eder - AI sonraki turda oynamaya devam eder
                     }
-                } else {
-                    // AI yakalayamadı
-                    val failState = engine.failMove(stateAfterPick)
-                    _gameState.value = failState
-                    _message.value = "AI kaçırdı! Senin sıran!"
+                    MoveResult.SUCCESS -> {
+                        // 3) Havadaki kapçığı yakala, sonra tekrar fırlatmak için döngü devam eder
+                        val (afterCatch, _) = engine.catchStone(afterPick, Position(500f, 500f))
+                        _gameState.value = afterCatch
+                        delay(400)
+                    }
+                    else -> {
+                        val failState = engine.failMove(afterPick)
+                        _gameState.value = failState
+                        _message.value = "Yapay Zeka şaşırdı! Senin sıran. 🎯"
+                        return@launch
+                    }
                 }
-            } else {
-                // AI toplayamadı
-                val failState = engine.failMove(stateAfterThrow)
-                _gameState.value = failState
-                _message.value = "AI başaramadı! Senin sıran!"
             }
         }
     }

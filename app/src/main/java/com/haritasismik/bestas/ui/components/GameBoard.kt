@@ -243,56 +243,63 @@ private fun DrawScope.drawStoneWithEffects(
             }
 
             StoneStyle.PISTACHIO -> {
-                // Gölge
+                // Gölge (yerdeyken) - zeminden ayrışması için belirgin
                 if (!isInAir) {
                     drawOval(
-                        color = Color.Black.copy(alpha = 0.2f * alpha),
-                        topLeft = Offset(x - stoneSize * 0.35f + 3f, y - stoneSize * 0.22f + 3f),
-                        size = Size(stoneSize * 0.7f, stoneSize * 0.45f)
+                        color = Color.Black.copy(alpha = 0.35f * alpha),
+                        topLeft = Offset(x - stoneSize * 0.4f + 4f, y - stoneSize * 0.28f + 5f),
+                        size = Size(stoneSize * 0.8f, stoneSize * 0.55f)
                     )
                 }
 
-                // Kabuk (bej/krem)
+                // Koyu dış hat (ahşap zeminden ayrışması için kontur)
                 drawOval(
-                    color = Color(0xFFE8D5B7).copy(alpha = alpha),
-                    topLeft = Offset(x - stoneSize * 0.35f, y - stoneSize * 0.22f),
-                    size = Size(stoneSize * 0.7f, stoneSize * 0.45f)
+                    color = Color(0xFF5A3D1A).copy(alpha = alpha),
+                    topLeft = Offset(x - stoneSize * 0.42f, y - stoneSize * 0.3f),
+                    size = Size(stoneSize * 0.84f, stoneSize * 0.6f)
                 )
 
-                // Kabuk üst ton
+                // Kabuk - daha sıcak/parlak bej (kontrastlı)
                 drawOval(
-                    color = Color(0xFFF0E6D0).copy(alpha = 0.5f * alpha),
-                    topLeft = Offset(x - stoneSize * 0.28f, y - stoneSize * 0.18f),
-                    size = Size(stoneSize * 0.5f, stoneSize * 0.3f)
+                    color = Color(0xFFEBC88A).copy(alpha = alpha),
+                    topLeft = Offset(x - stoneSize * 0.38f, y - stoneSize * 0.27f),
+                    size = Size(stoneSize * 0.76f, stoneSize * 0.54f)
                 )
 
-                // Yarık (fıstığın açık kısmı)
+                // Kabuk üst parlama (3D hacim hissi)
+                drawOval(
+                    color = Color(0xFFF7E2B0).copy(alpha = 0.7f * alpha),
+                    topLeft = Offset(x - stoneSize * 0.3f, y - stoneSize * 0.22f),
+                    size = Size(stoneSize * 0.5f, stoneSize * 0.28f)
+                )
+
+                // Açık yarık - fıstığın çatlağı (koyu, belirgin)
                 drawLine(
-                    color = Color(0xFF4A3520).copy(alpha = 0.8f * alpha),
-                    start = Offset(x - stoneSize * 0.18f, y + stoneSize * 0.02f),
-                    end = Offset(x + stoneSize * 0.18f, y + stoneSize * 0.02f),
-                    strokeWidth = 2.5f
+                    color = Color(0xFF3A2810).copy(alpha = 0.9f * alpha),
+                    start = Offset(x - stoneSize * 0.22f, y + stoneSize * 0.04f),
+                    end = Offset(x + stoneSize * 0.22f, y + stoneSize * 0.04f),
+                    strokeWidth = 3f
                 )
 
-                // Yeşil iç kısım (fıstığın kendisi)
+                // Yeşil iç kısım (fıstığın kendisi) - canlı yeşil, büyük ve net
                 drawOval(
-                    color = Color(0xFF7CB342).copy(alpha = alpha),
-                    topLeft = Offset(x - stoneSize * 0.14f, y - stoneSize * 0.03f),
-                    size = Size(stoneSize * 0.28f, stoneSize * 0.15f)
+                    color = Color(0xFF6FA82E).copy(alpha = alpha),
+                    topLeft = Offset(x - stoneSize * 0.18f, y - stoneSize * 0.06f),
+                    size = Size(stoneSize * 0.36f, stoneSize * 0.22f)
                 )
 
-                // Yeşil iç parlama
+                // Yeşil iç üst parlama
                 drawOval(
-                    color = Color(0xFFA5D65C).copy(alpha = 0.4f * alpha),
-                    topLeft = Offset(x - stoneSize * 0.08f, y - stoneSize * 0.01f),
-                    size = Size(stoneSize * 0.15f, stoneSize * 0.08f)
+                    color = Color(0xFFAEDD5E).copy(alpha = 0.6f * alpha),
+                    topLeft = Offset(x - stoneSize * 0.12f, y - stoneSize * 0.04f),
+                    size = Size(stoneSize * 0.18f, stoneSize * 0.1f)
                 )
 
-                // Parlak nokta
+                // Kabuk parlak nokta (ışık yansıması)
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.2f * alpha),
-                    radius = stoneSize * 0.05f,
-                    center = Offset(x - stoneSize * 0.12f, y - stoneSize * 0.1f)
+                    color = Color.White.copy(alpha = 0.4f * alpha),
+                    radius = stoneSize * 0.06f,
+                    center = Offset(x - stoneSize * 0.16f, y - stoneSize * 0.14f)
                 )
             }
         }

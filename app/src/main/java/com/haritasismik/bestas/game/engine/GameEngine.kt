@@ -90,8 +90,15 @@ class GameEngine {
     fun pickUpStones(state: GameState, stoneIds: List<Int>): Pair<GameState, MoveResult> {
         val round = state.currentRound
 
-        // Doğru sayıda taş mı toplandı?
-        if (round != GameRound.BRIDGE && stoneIds.size != round.pickCount) {
+        // Yerde toplanabilir kaç taş var? (kapçık havada, toplananlar hariç)
+        val groundCountBefore = state.stones.count { !it.isPickedUp && !it.isInAir }
+
+        // Bu hamlede toplanması gereken taş sayısı: tur sayısı kadar,
+        // ama yerde daha az kaldıysa kalanların hepsi (örn. Üçler: 3 + 1)
+        val required = minOf(round.pickCount.coerceAtLeast(1), groundCountBefore)
+
+        // Doğru sayıda taş mı seçildi?
+        if (stoneIds.isEmpty() || stoneIds.size != required) {
             return Pair(state, MoveResult.FAIL)
         }
 
@@ -108,7 +115,7 @@ class GameEngine {
             stonesPickedThisTurn = newPickedCount
         )
 
-        // Tüm taşlar toplandı mı? (tur tamamlandı)
+        // Yerdeki tüm taşlar toplandı mı? (sadece havadaki kapçık kaldı) → tur tamamlandı
         return if (remainingStones == 0) {
             Pair(completeRound(newState), MoveResult.ROUND_COMPLETE)
         } else {
@@ -123,12 +130,12 @@ class GameEngine {
     fun catchStone(state: GameState, catchPosition: Position): Pair<GameState, MoveResult> {
         val thrownStone = state.thrownStone ?: return Pair(state, MoveResult.FAIL)
 
-        // Basit yakalama kontrolü - gerçek uygulamada animasyon zamanlamasıyla olacak
-        // Burada basitleştirilmiş versiyon
+        // Kapçık (havaya atılan taş) yakalanınca tekrar yere döner - toplanmış SAYILMAZ.
+        // Sadece yerden elle topladığın taşlar birikir. Böylece tur düzgün tamamlanır.
         val newState = state.copy(
             thrownStone = null,
             stones = state.stones.map {
-                if (it.id == thrownStone.id) it.copy(isInAir = false, isPickedUp = true) else it
+                if (it.id == thrownStone.id) it.copy(isInAir = false, isPickedUp = false) else it
             }
         )
 

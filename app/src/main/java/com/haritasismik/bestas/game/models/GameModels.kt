@@ -25,7 +25,7 @@ enum class GameRound(val displayName: String, val pickCount: Int) {
     TWOS("İkiler", 2),
     THREES("Üçler", 3),
     FOURS("Dörtler", 4),
-    BRIDGE("Köprü", 0);   // Özel tur
+    BRIDGE("Köprü", 1);   // Özel final tur (birer birer toplanır)
 
     fun next(): GameRound? = when (this) {
         ONES -> TWOS
