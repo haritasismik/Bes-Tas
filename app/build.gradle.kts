@@ -1,7 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.google.gms.google-services")
+    // Firebase google-services plugin - google-services.json eklendikten sonra aktif et
+    // id("com.google.gms.google-services")
 }
 
 android {
@@ -100,14 +101,14 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.6")
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-database-ktx")
+    // Firebase - google-services.json eklendikten sonra aşağıdaki satırları aktif et
+    // implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
+    // implementation("com.google.firebase:firebase-auth-ktx")
+    // implementation("com.google.firebase:firebase-firestore-ktx")
+    // implementation("com.google.firebase:firebase-database-ktx")
 
     // Google Sign In
-    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    // implementation("com.google.android.gms:play-services-auth:20.7.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

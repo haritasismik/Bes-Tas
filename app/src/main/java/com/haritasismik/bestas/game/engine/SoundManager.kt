@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.SoundPool
-import com.haritasismik.bestas.R
 
 /**
  * Ses efektleri yöneticisi
@@ -47,195 +46,52 @@ class SoundManager(private val context: Context) {
             .setAudioAttributes(audioAttributes)
             .build()
 
-        loadSounds()
+        // Ses dosyaları henüz placeholder - gerçek .ogg dosyaları eklenince yüklenecek
+        // loadSounds()
     }
 
-    /**
-     * Ses dosyalarını yükle
-     * NOT: Bu ses dosyaları res/raw klasörüne eklenmelidir.
-     * Placeholder olarak tanımlanmıştır - gerçek .ogg/.mp3 dosyaları sonra eklenecek.
-     */
-    private fun loadSounds() {
-        soundPool?.let { pool ->
-            try {
-                stoneThrowId = pool.load(context, R.raw.stone_throw, 1)
-                stoneCatchId = pool.load(context, R.raw.stone_catch, 1)
-                stoneDropId = pool.load(context, R.raw.stone_drop, 1)
-                stonePickUpId = pool.load(context, R.raw.stone_pickup, 1)
-                stoneCollideId = pool.load(context, R.raw.stone_collide, 1)
-                roundCompleteId = pool.load(context, R.raw.round_complete, 1)
-                gameWinId = pool.load(context, R.raw.game_win, 1)
-                gameLoseId = pool.load(context, R.raw.game_lose, 1)
-                buttonClickId = pool.load(context, R.raw.button_click, 1)
-                matchFoundId = pool.load(context, R.raw.match_found, 1)
-            } catch (e: Exception) {
-                // Ses dosyaları henüz eklenmemişse sessiz devam et
-                e.printStackTrace()
-            }
-        }
-    }
+    fun playThrow() { playSound(stoneThrowId) }
+    fun playCatch() { playSound(stoneCatchId) }
+    fun playDrop() { playSound(stoneDropId) }
+    fun playPickUp() { playSound(stonePickUpId, volume = soundVolume * 0.7f) }
+    fun playCollide() { playSound(stoneCollideId, volume = soundVolume * 0.5f) }
+    fun playRoundComplete() { playSound(roundCompleteId, volume = soundVolume * 1.2f) }
+    fun playWin() { playSound(gameWinId, volume = 1f) }
+    fun playLose() { playSound(gameLoseId, volume = 0.8f) }
+    fun playButtonClick() { playSound(buttonClickId, volume = soundVolume * 0.5f) }
+    fun playMatchFound() { playSound(matchFoundId, volume = 1f) }
 
-    // --- Ses Efekti Çalma Fonksiyonları ---
-
-    /**
-     * Taş fırlatma sesi
-     */
-    fun playThrow() {
-        playSound(stoneThrowId)
-    }
-
-    /**
-     * Taş yakalama sesi
-     */
-    fun playCatch() {
-        playSound(stoneCatchId)
-    }
-
-    /**
-     * Taş düşürme sesi (başarısız hamle)
-     */
-    fun playDrop() {
-        playSound(stoneDropId)
-    }
-
-    /**
-     * Taş toplama sesi
-     */
-    fun playPickUp() {
-        playSound(stonePickUpId, volume = soundVolume * 0.7f)
-    }
-
-    /**
-     * Taşların birbirine çarpma sesi
-     */
-    fun playCollide() {
-        playSound(stoneCollideId, volume = soundVolume * 0.5f)
-    }
-
-    /**
-     * Tur tamamlama sesi
-     */
-    fun playRoundComplete() {
-        playSound(roundCompleteId, volume = soundVolume * 1.2f)
-    }
-
-    /**
-     * Oyun kazanma sesi
-     */
-    fun playWin() {
-        playSound(gameWinId, volume = 1f)
-    }
-
-    /**
-     * Oyun kaybetme sesi
-     */
-    fun playLose() {
-        playSound(gameLoseId, volume = 0.8f)
-    }
-
-    /**
-     * Buton tıklama sesi
-     */
-    fun playButtonClick() {
-        playSound(buttonClickId, volume = soundVolume * 0.5f)
-    }
-
-    /**
-     * Online eşleşme bulundu sesi
-     */
-    fun playMatchFound() {
-        playSound(matchFoundId, volume = 1f)
-    }
-
-    // --- Arka Plan Müziği ---
-
-    /**
-     * Arka plan müziğini başlat
-     */
     fun startBackgroundMusic() {
-        if (!musicEnabled) return
-
-        try {
-            mediaPlayer = MediaPlayer.create(context, R.raw.background_music)?.apply {
-                isLooping = true
-                setVolume(musicVolume, musicVolume)
-                start()
-            }
-        } catch (e: Exception) {
-            // Müzik dosyası yoksa sessiz devam et
-            e.printStackTrace()
-        }
+        // Gerçek müzik dosyası eklenince aktif edilecek
     }
 
-    /**
-     * Arka plan müziğini durdur
-     */
     fun stopBackgroundMusic() {
         mediaPlayer?.apply {
-            if (isPlaying) {
-                stop()
-            }
+            if (isPlaying) stop()
             release()
         }
         mediaPlayer = null
     }
 
-    /**
-     * Arka plan müziğini duraklat
-     */
     fun pauseBackgroundMusic() {
-        mediaPlayer?.let {
-            if (it.isPlaying) {
-                it.pause()
-            }
-        }
+        mediaPlayer?.let { if (it.isPlaying) it.pause() }
     }
 
-    /**
-     * Arka plan müziğini devam ettir
-     */
     fun resumeBackgroundMusic() {
         if (!musicEnabled) return
         mediaPlayer?.start()
     }
 
-    // --- Ayarlar ---
-
-    /**
-     * Ses efektlerini aç/kapa
-     */
-    fun setSoundEnabled(enabled: Boolean) {
-        soundEnabled = enabled
-    }
-
-    /**
-     * Müziği aç/kapa
-     */
+    fun setSoundEnabled(enabled: Boolean) { soundEnabled = enabled }
     fun setMusicEnabled(enabled: Boolean) {
         musicEnabled = enabled
-        if (!enabled) {
-            pauseBackgroundMusic()
-        } else {
-            resumeBackgroundMusic()
-        }
+        if (!enabled) pauseBackgroundMusic() else resumeBackgroundMusic()
     }
-
-    /**
-     * Ses seviyesini ayarla (0.0 - 1.0)
-     */
-    fun setSoundVolume(volume: Float) {
-        soundVolume = volume.coerceIn(0f, 1f)
-    }
-
-    /**
-     * Müzik seviyesini ayarla (0.0 - 1.0)
-     */
+    fun setSoundVolume(volume: Float) { soundVolume = volume.coerceIn(0f, 1f) }
     fun setMusicVolume(volume: Float) {
         musicVolume = volume.coerceIn(0f, 1f)
         mediaPlayer?.setVolume(musicVolume, musicVolume)
     }
-
-    // --- Dahili Fonksiyonlar ---
 
     private fun playSound(soundId: Int, volume: Float = soundVolume) {
         if (!soundEnabled || soundId == 0) return
@@ -243,9 +99,6 @@ class SoundManager(private val context: Context) {
         soundPool?.play(soundId, clampedVolume, clampedVolume, 1, 0, 1f)
     }
 
-    /**
-     * Kaynakları serbest bırak
-     */
     fun release() {
         soundPool?.release()
         soundPool = null
