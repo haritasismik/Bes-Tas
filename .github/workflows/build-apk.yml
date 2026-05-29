@@ -37,21 +37,20 @@ jobs:
       - name: Build Debug APK
         env:
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Find APK
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tail -100
+          echo "=== Looking for APK files ==="
+          find . -name "*.apk" -type f
+          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug dir not found"
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: BesTas-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/**/*.apk
+          if-no-files-found: warn
           retention-days: 30
-
-      - name: Show error log on failure
-        if: failure()
-        run: |
-          echo "=== KOTLIN COMPILE ERRORS ==="
-          find . -name "*.log" -path "*/build/*" -exec grep -l "error:" {} \; | head -5 | xargs cat 2>/dev/null | grep "e:" | head -30
-          echo "=== GRADLE ERROR OUTPUT ==="
-          find . -name "*.log" -path "*/build/*" | head -3 | xargs tail -50 2>/dev/null
