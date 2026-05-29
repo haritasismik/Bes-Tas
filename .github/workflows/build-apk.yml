@@ -37,20 +37,23 @@ jobs:
       - name: Build Debug APK
         env:
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon 2>&1 | tee build_output.txt; exit ${PIPESTATUS[0]}
+
+      - name: Show compile errors if failed
+        if: failure()
+        run: |
+          echo "========== COMPILATION ERRORS =========="
+          grep -n "^e:" build_output.txt || echo "No e: lines found"
+          echo "========== LAST 50 LINES =========="
+          tail -50 build_output.txt
 
       - name: Find APK
-        run: |
-          echo "=== Looking for APK files ==="
-          find . -name "*.apk" -type f
-          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug dir not found"
+        run: find . -name "*.apk" -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BesTas-debug-apk
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/debug/**/*.apk
+          path: app/build/outputs/apk/debug/
           if-no-files-found: warn
           retention-days: 30
