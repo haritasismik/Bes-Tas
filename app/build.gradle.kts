@@ -21,15 +21,35 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            // Bu değerleri local.properties veya CI/CD ortam değişkenlerinden al
+            // Keystore oluşturma:
+            // keytool -genkey -v -keystore bestas-release.keystore -alias bestas -keyalg RSA -keysize 2048 -validity 10000
+            storeFile = file("bestas-release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "placeholder"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "bestas"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "placeholder"
+        }
+    }
+
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -39,6 +59,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
@@ -46,6 +67,18 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    bundle {
+        language {
+            enableSplit = true
+        }
+        density {
+            enableSplit = true
+        }
+        abi {
+            enableSplit = true
         }
     }
 }

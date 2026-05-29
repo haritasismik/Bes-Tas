@@ -1,0 +1,23 @@
+Bu klasöre aşağıdaki ses dosyaları eklenmelidir (.ogg veya .mp3 formatında):
+
+Oyun Efektleri:
+- stone_throw.ogg      : Taş fırlatma sesi (kısa, hafif rüzgar efekti)
+- stone_catch.ogg      : Taş yakalama sesi (tok, elle kapma)
+- stone_drop.ogg       : Taş düşürme sesi (sert yere çarpma)
+- stone_pickup.ogg     : Taş toplama sesi (hafif tık)
+- stone_collide.ogg    : Taşların çarpışma sesi (tık-tak)
+- round_complete.ogg   : Tur tamamlama sesi (kısa melodi, başarı)
+- game_win.ogg         : Oyun kazanma sesi (zafer fanfarı)
+- game_lose.ogg        : Oyun kaybetme sesi (kısa üzgün ton)
+- button_click.ogg     : Buton tıklama sesi (UI)
+- match_found.ogg      : Online eşleşme bulundu sesi (bildirim tonu)
+
+Arka Plan Müziği:
+- background_music.ogg : Sakin, geleneksel Türk müziği (loop)
+
+Önerilen kaynaklar (ücretsiz):
+- freesound.org
+- opengameart.org
+- pixabay.com/sound-effects
+
+Ses dosyaları 44100Hz, mono, OGG Vorbis formatında olmalı (dosya boyutunu küçük tutar).

@@ -15,28 +15,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.haritasismik.bestas.data.firebase.LeaderboardEntry
+import com.haritasismik.bestas.data.firebase.PlayerStats
 import com.haritasismik.bestas.ui.theme.*
-
-data class LeaderboardEntry(
-    val name: String,
-    val wins: Int,
-    val rank: Int
-)
 
 @Composable
 fun LeaderboardScreen(
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    viewModel: LeaderboardViewModel = viewModel()
 ) {
-    // Örnek veri - Firebase'den gelecek
-    val entries = remember {
-        listOf(
-            LeaderboardEntry("Ahmet", 42, 1),
-            LeaderboardEntry("Ayşe", 38, 2),
-            LeaderboardEntry("Mehmet", 35, 3),
-            LeaderboardEntry("Fatma", 29, 4),
-            LeaderboardEntry("Ali", 25, 5),
-        )
-    }
+    val entries by viewModel.entries.collectAsState()
+    val myStats by viewModel.myStats.collectAsState()
+    val myRank by viewModel.myRank.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     Box(
         modifier = Modifier
@@ -56,9 +49,18 @@ fun LeaderboardScreen(
                 .fillMaxSize()
                 .padding(24.dp)
         ) {
-            // Geri butonu
-            TextButton(onClick = onBackClick) {
-                Text("← Geri", color = CreamWhite, fontSize = 16.sp)
+            // Üst bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onBackClick) {
+                    Text("← Geri", color = CreamWhite, fontSize = 16.sp)
+                }
+                TextButton(onClick = { viewModel.refresh() }) {
+                    Text("🔄 Yenile", color = GoldAccent, fontSize = 14.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -72,8 +74,44 @@ fun LeaderboardScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // Kendi istatistiklerimiz
+            myStats?.let { stats ->
+                MyStatsCard(stats = stats, rank = myRank)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Loading
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = GoldAccent)
+                }
+            }
+
+            // Hata mesajı
+            errorMessage?.let { error ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = DeepRed.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = error,
+                        modifier = Modifier.padding(12.dp),
+                        color = CreamWhite,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Sıralama listesi
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -82,9 +120,11 @@ fun LeaderboardScreen(
                 }
             }
 
-            if (entries.isEmpty()) {
+            if (entries.isEmpty() && !isLoading) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(48.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -96,6 +136,61 @@ fun LeaderboardScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MyStatsCard(stats: PlayerStats, rank: LeaderboardEntry?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = GoldAccent.copy(alpha = 0.1f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "📊 Senin İstatistiklerin",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = GoldAccent
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                StatItem(label = "Sıra", value = rank?.rank?.toString() ?: "-")
+                StatItem(label = "Galibiyet", value = "${stats.wins}")
+                StatItem(label = "Mağlubiyet", value = "${stats.losses}")
+                StatItem(label = "Oran", value = "%${(stats.winRate * 100).toInt()}")
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatItem(label: String, value: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = CreamWhite
+        )
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = CreamWhite.copy(alpha = 0.6f)
+        )
     }
 }
 
@@ -138,13 +233,19 @@ private fun LeaderboardRow(
                 modifier = Modifier.width(48.dp)
             )
 
-            Text(
-                text = entry.name,
-                color = CreamWhite,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = entry.name,
+                    color = CreamWhite,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "${entry.totalGames} maç · %${(entry.winRate * 100).toInt()} oran",
+                    color = CreamWhite.copy(alpha = 0.5f),
+                    fontSize = 11.sp
+                )
+            }
 
             Column(
                 horizontalAlignment = Alignment.End
