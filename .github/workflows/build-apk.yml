@@ -24,7 +24,7 @@ jobs:
 
       - name: Install SDK components
         run: |
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
 
       - name: Download and setup Gradle wrapper
         run: |
@@ -35,11 +35,23 @@ jobs:
           chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tail -100
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: BesTas-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
+
+      - name: Show error log on failure
+        if: failure()
+        run: |
+          echo "=== KOTLIN COMPILE ERRORS ==="
+          find . -name "*.log" -path "*/build/*" -exec grep -l "error:" {} \; | head -5 | xargs cat 2>/dev/null | grep "e:" | head -30
+          echo "=== GRADLE ERROR OUTPUT ==="
+          find . -name "*.log" -path "*/build/*" | head -3 | xargs tail -50 2>/dev/null
