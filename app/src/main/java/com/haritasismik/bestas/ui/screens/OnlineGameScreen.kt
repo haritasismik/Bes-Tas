@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.haritasismik.bestas.data.repository.OnlineConnectionState
 import com.haritasismik.bestas.ui.theme.*
+import kotlin.math.cos
+import kotlin.math.PI
 
 /**
  * Online eşleşme bekleme ekranı
@@ -32,7 +34,7 @@ fun OnlineMatchmakingScreen(
         initialValue = 0.8f,
         targetValue = 1.2f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = EaseInOutSine),
+            animation = tween(1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
