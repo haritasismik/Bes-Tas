@@ -60,7 +60,6 @@ class SoundManager(private val context: Context) {
     fun playCatch() { playSound(stoneCatchId) }
     fun playDrop() { playSound(stoneDropId) }
     fun playPickUp() { playSound(stonePickUpId, volume = soundVolume * 0.7f) }
-    fun playCollide() { playSound(stoneCollideId, volume = soundVolume * 0.5f) }
     fun playRoundComplete() { playSound(roundCompleteId, volume = soundVolume * 1.2f) }
     fun playWin() { playSound(gameWinId, volume = 1f) }
     fun playLose() { playSound(gameLoseId, volume = 0.8f) }
