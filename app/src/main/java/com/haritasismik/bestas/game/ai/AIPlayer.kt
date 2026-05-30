@@ -48,19 +48,16 @@ class AIPlayer(
      * AI toplayacağı taşları seçer
      */
     fun chooseStonesToPick(state: GameState): List<Int> {
-        val availableStones = state.stones.filter { !it.isPickedUp && !it.isInAir }
+        val availableStones = state.groundStones
         if (availableStones.isEmpty()) return emptyList()
 
-        // Toplanması gereken: tur sayısı kadar, ama yerde daha az varsa hepsi
         val pickCount = minOf(state.currentRound.pickCount.coerceAtLeast(1), availableStones.size)
 
         return when (difficulty) {
             AIDifficulty.EASY -> {
-                // Rastgele seç
                 availableStones.shuffled().take(pickCount).map { it.id }
             }
             AIDifficulty.MEDIUM, AIDifficulty.HARD -> {
-                // En yakın olanları seç (birbirine en yakın taşları grupla)
                 findClosestGroup(availableStones, pickCount)
             }
         }

@@ -49,7 +49,7 @@ class GameViewModel : ViewModel() {
         )
 
         _gameState.value = newState
-        _message.value = "Bir taşa dokun ve fırlat!"
+        _message.value = "Heneke (kapçık) taşını seç! 🪨"
     }
 
     fun onStoneClicked(stoneId: Int) {
@@ -61,69 +61,82 @@ class GameViewModel : ViewModel() {
 
         val stone = state.stones.find { it.id == stoneId } ?: return
         if (stone.isPickedUp) return
-        // Havadaki kapçık tekrar seçilemez
         if (stone.isInAir) return
 
+        // ADIM 1: Heneke seçimi (oyunun başında)
+        if (!state.isHenekeSelected) {
+            val newState = engine.selectHeneke(state, stoneId)
+            _gameState.value = newState
+            _message.value = "Heneke seçildi! ✓ Şimdi 'Fırlat' butonuna bas."
+            return
+        }
+
+        // ADIM 2: Heneke havada değilse - fırlatma bekleniyor
         if (state.thrownStone == null) {
-            // Henüz taş atılmadı - bu taşı seç fırlatmak için
-            selectedStones.clear()
-            selectedStones.add(stoneId)
-            _message.value = "Taşı fırlatmak için 'Fırlat' butonuna bas!"
+            _message.value = "Henekeyi fırlatmak için 'Fırlat' butonuna bas!"
+            return
+        }
+
+        // ADIM 3: Heneke havada - yerdeki taşları seç (heneke hariç)
+        if (stoneId == state.henekeId) {
+            _message.value = "Heneke zaten havada! Yerdeki taşları seç."
+            return
+        }
+
+        // Taş seçimi
+        if (selectedStones.contains(stoneId)) {
+            selectedStones.remove(stoneId)
         } else {
-            // Taş havada - yerdeki taşları topla
-            if (selectedStones.contains(stoneId)) {
-                selectedStones.remove(stoneId)
-            } else {
-                selectedStones.add(stoneId)
-            }
+            selectedStones.add(stoneId)
+        }
 
-            // Yerde toplanabilir taş sayısı (kapçık hariç)
-            val groundCount = state.stones.count { !it.isPickedUp && !it.isInAir }
-            val needed = minOf(state.currentRound.pickCount.coerceAtLeast(1), groundCount)
-            _message.value = "${selectedStones.size}/$needed taş seçildi"
+        val groundCount = state.groundStones.size
+        val needed = minOf(state.currentRound.pickCount.coerceAtLeast(1), groundCount)
+        _message.value = "${selectedStones.size}/$needed taş seçildi"
 
-            if (selectedStones.size == needed) {
-                performPickUp()
-            }
+        // Yeterli taş seçildi → otomatik topla
+        if (selectedStones.size == needed) {
+            performPickUp()
         }
     }
 
     fun onBoardClicked(position: Position) {
-        // Boş alana tıklama - seçimi temizle
-        if (_gameState.value.thrownStone == null) {
-            selectedStones.clear()
-            _message.value = "Bir taşa dokun ve fırlat!"
+        val state = _gameState.value
+        if (state.thrownStone == null && state.isHenekeSelected) {
+            _message.value = "Henekeyi fırlatmak için 'Fırlat' butonuna bas!"
         }
     }
 
     fun onThrowStone() {
         val state = _gameState.value
-        if (state.isGameOver || state.thrownStone != null) return
-        if (selectedStones.isEmpty()) {
-            _message.value = "Önce fırlatılacak taşı seç!"
+        if (state.isGameOver) return
+        if (state.thrownStone != null) return
+
+        if (!state.isHenekeSelected) {
+            _message.value = "Önce heneke taşını seç!"
             return
         }
 
-        val stoneToThrow = selectedStones.first()
-        val newState = engine.throwStone(state, stoneToThrow)
+        // Henekeyi fırlat
+        val newState = engine.throwHeneke(state)
         _gameState.value = newState
         selectedStones.clear()
 
-        val groundCount = newState.stones.count { !it.isPickedUp && !it.isInAir }
+        val groundCount = newState.groundStones.size
         val needed = minOf(newState.currentRound.pickCount.coerceAtLeast(1), groundCount)
-        _message.value = "Şimdi $needed taş seç ve topla!"
+        _message.value = "$needed taş seç! (Heneke düşmeden topla)"
     }
 
     fun onCatchStone() {
         val state = _gameState.value
         if (state.thrownStone == null) return
 
-        val (newState, result) = engine.catchStone(state, Position(500f, 500f))
+        val (newState, result) = engine.catchHeneke(state)
 
         when (result) {
             MoveResult.SUCCESS -> {
                 _gameState.value = newState
-                handleTurnEnd(newState)
+                handleAfterCatch(newState)
             }
             MoveResult.FAIL -> {
                 handleFail()
@@ -142,39 +155,48 @@ class GameViewModel : ViewModel() {
         when (result) {
             MoveResult.SUCCESS -> {
                 _gameState.value = newState
-                _message.value = "Güzel! Şimdi havadaki taşı yakala!"
+                _message.value = "Güzel! ✓ Şimdi henekeyi yakala!"
             }
             MoveResult.ROUND_COMPLETE -> {
                 _gameState.value = newState
-                if (newState.isGameOver) {
-                    _message.value = "${newState.currentPlayer.name} kazandı! 🏆"
-                } else {
-                    _message.value = "Tur tamamlandı! Sonraki: ${newState.currentRound.displayName}"
-                    checkAITurn(newState)
-                }
+                _message.value = "Güzel! ✓ Henekeyi yakala, tur biter!"
             }
             MoveResult.FAIL -> {
+                // Yakındaki taşa dokundun!
+                _message.value = "Diğer taşa dokundun! 😱 Sıra geçti."
                 handleFail()
             }
             else -> {}
         }
     }
 
-    private fun handleTurnEnd(state: GameState) {
+    private fun handleAfterCatch(state: GameState) {
         if (state.isGameOver) {
             _message.value = "${state.currentPlayer.name} kazandı! 🏆"
             return
         }
 
-        // Sıra hala aynı oyuncuda, yeni taş atması lazım
-        _message.value = "Bir taşa dokun ve fırlat!"
-        checkAITurn(state)
+        // Yerde hala taş var mı?
+        val remaining = state.groundStones.size
+        if (remaining == 0) {
+            // Tur zaten tamamlandı (pickUpStones'da handle edildi)
+            // Yeni tur başladı
+            if (state.currentRound == GameRound.ONES) {
+                _message.value = "Birler bitti! → ${state.currentRound.displayName}. Fırlat!"
+            } else {
+                _message.value = "${state.currentRound.displayName} turu. Fırlat!"
+            }
+            checkAITurn(state)
+        } else {
+            // Aynı turda devam - henekeyi tekrar at
+            _message.value = "$remaining taş kaldı. Henekeyi tekrar fırlat!"
+        }
     }
 
     private fun handleFail() {
         val newState = engine.failMove(_gameState.value)
         _gameState.value = newState
-        _message.value = "Kaçırdın! Sıra ${newState.currentPlayer.name}'a geçti."
+        _message.value = "Sıra ${newState.currentPlayer.name}'a geçti. Heneke seç!"
 
         checkAITurn(newState)
     }
@@ -187,64 +209,74 @@ class GameViewModel : ViewModel() {
 
     private fun performAITurn() {
         viewModelScope.launch {
-            // AI başarısız olana veya oyunu bitirene kadar oynar
-            while (true) {
-                val state = _gameState.value
-                if (state.isGameOver || state.isPlayer1Turn) return@launch
+            var state = _gameState.value
+            if (state.isGameOver || state.isPlayer1Turn) return@launch
 
-                _message.value = "Yapay Zeka düşünüyor..."
+            // AI heneke seçer
+            if (!state.isHenekeSelected) {
+                _message.value = "Yapay Zeka heneke seçiyor..."
+                delay(600)
+                val henekeId = aiPlayer.chooseStoneToThrow(state)
+                state = engine.selectHeneke(state, henekeId)
+                _gameState.value = state
+                delay(400)
+            }
+
+            // AI oynamaya başlar
+            while (!state.isGameOver && !state.isPlayer1Turn) {
+                _message.value = "Yapay Zeka oynuyor..."
                 aiPlayer.thinkingDelay()
 
-                // 1) Taş fırlat
-                val stoneToThrow = aiPlayer.chooseStoneToThrow(state)
-                val afterThrow = engine.throwStone(state, stoneToThrow)
-                _gameState.value = afterThrow
+                // Henekeyi fırlat
+                state = engine.throwHeneke(state)
+                _gameState.value = state
                 delay(500)
 
-                // Bu hamle başarılı mı? (zorluk seviyesine göre)
+                // Başarılı mı?
                 if (!aiPlayer.isMoveSucessful()) {
-                    val failState = engine.failMove(afterThrow)
-                    _gameState.value = failState
-                    _message.value = "Yapay Zeka şaşırdı! Senin sıran. 🎯"
+                    state = engine.failMove(state)
+                    _gameState.value = state
+                    _message.value = "Yapay Zeka başaramadı! Senin sıran. Heneke seç!"
                     return@launch
                 }
 
-                // 2) Yerden taş topla
-                val stonesToPick = aiPlayer.chooseStonesToPick(afterThrow)
+                // Taşları topla
+                val stonesToPick = aiPlayer.chooseStonesToPick(state)
                 if (stonesToPick.isEmpty()) {
-                    val failState = engine.failMove(afterThrow)
-                    _gameState.value = failState
-                    _message.value = "Yapay Zeka şaşırdı! Senin sıran. 🎯"
+                    state = engine.failMove(state)
+                    _gameState.value = state
+                    _message.value = "Yapay Zeka başaramadı! Senin sıran. Heneke seç!"
                     return@launch
                 }
 
-                val (afterPick, pickResult) = engine.pickUpStones(afterThrow, stonesToPick)
-                _gameState.value = afterPick
+                val (afterPick, pickResult) = engine.pickUpStones(state, stonesToPick)
+                state = afterPick
+                _gameState.value = state
                 delay(300)
 
-                when (pickResult) {
-                    MoveResult.ROUND_COMPLETE -> {
-                        if (afterPick.isGameOver) {
-                            _message.value = "Yapay Zeka kazandı! 🏆"
-                            return@launch
-                        }
-                        _message.value = "Yapay Zeka turu geçti! Sıradaki: ${afterPick.currentRound.displayName}"
-                        delay(800)
-                        // Döngü devam eder - AI sonraki turda oynamaya devam eder
-                    }
-                    MoveResult.SUCCESS -> {
-                        // 3) Havadaki kapçığı yakala, sonra tekrar fırlatmak için döngü devam eder
-                        val (afterCatch, _) = engine.catchStone(afterPick, Position(500f, 500f))
-                        _gameState.value = afterCatch
-                        delay(400)
-                    }
-                    else -> {
-                        val failState = engine.failMove(afterPick)
-                        _gameState.value = failState
-                        _message.value = "Yapay Zeka şaşırdı! Senin sıran. 🎯"
+                if (pickResult == MoveResult.FAIL) {
+                    state = engine.failMove(state)
+                    _gameState.value = state
+                    _message.value = "Yapay Zeka taşa dokundu! Senin sıran. Heneke seç!"
+                    return@launch
+                }
+
+                // Henekeyi yakala
+                val (afterCatch, catchResult) = engine.catchHeneke(state)
+                state = afterCatch
+                _gameState.value = state
+                delay(400)
+
+                if (pickResult == MoveResult.ROUND_COMPLETE) {
+                    if (state.isGameOver) {
+                        _message.value = "Yapay Zeka kazandı! 🏆"
                         return@launch
                     }
+                    _message.value = "Yapay Zeka tur geçti! → ${state.currentRound.displayName}"
+                    delay(800)
+                    // Yeni turda devam (döngü tekrar eder)
                 }
+                // SUCCESS ise döngü devam eder (aynı turda devam)
             }
         }
     }

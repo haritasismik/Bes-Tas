@@ -52,7 +52,8 @@ data class Stone(
     val position: Position,
     val isInAir: Boolean = false,
     val isPickedUp: Boolean = false,
-    val rotation: Float = 0f
+    val rotation: Float = 0f,
+    val isHeneke: Boolean = false  // Bu taş heneke (kapçık) mi?
 )
 
 /**
@@ -85,6 +86,8 @@ data class GameState(
     val currentRound: GameRound = GameRound.ONES,
     val stones: List<Stone> = emptyList(),
     val thrownStone: Stone? = null,
+    val henekeId: Int? = null,            // Kapçık taşı (tüm oyun boyunca sabit)
+    val isHenekeSelected: Boolean = false, // Heneke seçildi mi?
     val isGameOver: Boolean = false,
     val winnerId: String? = null,
     val gameMode: GameMode = GameMode.LOCAL,
@@ -100,6 +103,10 @@ data class GameState(
 
     val isPlayer1Turn: Boolean
         get() = currentPlayerId == player1.id
+
+    /** Yerdeki toplanabilir taşlar (heneke ve toplananlar hariç) */
+    val groundStones: List<Stone>
+        get() = stones.filter { !it.isPickedUp && !it.isInAir && it.id != henekeId }
 }
 
 /**
