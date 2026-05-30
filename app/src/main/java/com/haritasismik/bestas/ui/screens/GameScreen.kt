@@ -156,13 +156,13 @@ fun GameScreen(
 @Composable
 private fun HenekeTimerBar(timeLeft: Float) {
     val color = when {
-        timeLeft > 0.5f -> Color(0xFF4CAF50)  // Yeşil
-        timeLeft > 0.25f -> Color(0xFFFF9800) // Turuncu
-        else -> Color(0xFFF44336)             // Kırmızı
+        timeLeft > 0.5f -> Color(0xFF4CAF50)
+        timeLeft > 0.25f -> Color(0xFFFF9800)
+        else -> Color(0xFFF44336)
     }
 
     LinearProgressIndicator(
-        progress = { timeLeft },
+        progress = timeLeft,
         modifier = Modifier
             .fillMaxWidth()
             .height(6.dp)
