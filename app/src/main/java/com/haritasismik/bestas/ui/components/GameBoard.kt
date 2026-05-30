@@ -198,7 +198,91 @@ fun GameBoard(
                 )
             )
         }
+
+        // Köprü görseli (el şekli - 5'ler turunda)
+        if (gameState.isBridgePlaced && gameState.bridgePosition != null) {
+            val bx = gameState.bridgePosition.x * scaleX
+            val by = gameState.bridgePosition.y * scaleY
+            drawBridgeHand(bx, by, scaleX)
+        }
+
+        // Ebe taşı işareti (kırmızı halka)
+        if (gameState.ebeStoneId != null) {
+            val ebeStone = gameState.stones.find { it.id == gameState.ebeStoneId }
+            if (ebeStone != null && !ebeStone.isPickedUp) {
+                val ex = ebeStone.position.x * scaleX
+                val ey = ebeStone.position.y * scaleY
+                drawCircle(
+                    color = Color(0xFFFF1744).copy(alpha = 0.7f),
+                    radius = GameEngine.STONE_SIZE * scaleX * 0.6f,
+                    center = Offset(ex, ey),
+                    style = Stroke(width = 4f)
+                )
+                // "EBE" yazısı
+                drawCircle(
+                    color = Color(0xFFFF1744).copy(alpha = 0.15f),
+                    radius = GameEngine.STONE_SIZE * scaleX * 0.5f,
+                    center = Offset(ex, ey)
+                )
+            }
+        }
     }
+}
+
+/**
+ * Köprü el görseli - iki parmak yerde, arc şeklinde köprü
+ */
+private fun DrawScope.drawBridgeHand(x: Float, y: Float, scale: Float) {
+    val s = 80f * scale
+
+    // El gölgesi
+    drawOval(
+        color = Color.Black.copy(alpha = 0.2f),
+        topLeft = Offset(x - s * 0.8f + 4f, y - s * 0.2f + 4f),
+        size = Size(s * 1.6f, s * 0.5f)
+    )
+
+    // Sol parmak (dikey, yere basan)
+    drawRoundRect(
+        color = Color(0xFFE8B88A),
+        topLeft = Offset(x - s * 0.7f, y - s * 0.6f),
+        size = Size(s * 0.25f, s * 0.8f),
+        cornerRadius = CornerRadius(s * 0.1f, s * 0.1f)
+    )
+
+    // Sağ parmak (dikey, yere basan)
+    drawRoundRect(
+        color = Color(0xFFE8B88A),
+        topLeft = Offset(x + s * 0.45f, y - s * 0.6f),
+        size = Size(s * 0.25f, s * 0.8f),
+        cornerRadius = CornerRadius(s * 0.1f, s * 0.1f)
+    )
+
+    // Köprü (parmaklar arası arc - el sırtı)
+    val bridgePath = Path().apply {
+        moveTo(x - s * 0.55f, y - s * 0.5f)
+        quadraticBezierTo(x, y - s * 1.1f, x + s * 0.55f, y - s * 0.5f)
+    }
+    drawPath(
+        path = bridgePath,
+        color = Color(0xFFD4A076),
+        style = Stroke(width = s * 0.2f, cap = StrokeCap.Round)
+    )
+
+    // Köprü altı geçiş alanı (yarı saydam gösterge)
+    drawOval(
+        color = Color(0xFF4CAF50).copy(alpha = 0.15f),
+        topLeft = Offset(x - s * 0.5f, y - s * 0.15f),
+        size = Size(s * 1f, s * 0.35f)
+    )
+
+    // Geçiş oku
+    drawLine(
+        color = Color(0xFF4CAF50).copy(alpha = 0.5f),
+        start = Offset(x - s * 0.3f, y),
+        end = Offset(x + s * 0.3f, y),
+        strokeWidth = 3f
+    )
 }
 
 /**
@@ -268,7 +352,8 @@ private fun DrawScope.drawRealisticStone(
 }
 
 /**
- * Gerçekçi fıstık çizimi - fıstık kabuğu şeklinde (büyük, detaylı)
+ * Gerçek yer fıstığı çizimi - çift loblu kabuk, ızgara doku, doğal renk
+ * Referans: Kabuğunda ızgara çizgiler, ortada daralan çift şişkinlik
  */
 private fun DrawScope.drawRealisticPistachio(
     x: Float, y: Float, rotation: Float, scale: Float,
@@ -281,100 +366,132 @@ private fun DrawScope.drawRealisticPistachio(
         if (isHighlighted) {
             drawOval(
                 color = Color(0xFFFFD700).copy(alpha = 0.4f),
-                topLeft = Offset(x - s * 0.55f, y - s * 0.42f),
-                size = Size(s * 1.1f, s * 0.84f)
+                topLeft = Offset(x - s * 0.55f, y - s * 0.45f),
+                size = Size(s * 1.1f, s * 0.9f)
             )
         }
 
-        // Heneke işareti
+        // Heneke işareti (altın halka)
         if (isHeneke) {
             drawOval(
                 color = Color(0xFFFFD700).copy(alpha = 0.7f),
-                topLeft = Offset(x - s * 0.52f, y - s * 0.4f),
-                size = Size(s * 1.04f, s * 0.8f),
+                topLeft = Offset(x - s * 0.52f, y - s * 0.42f),
+                size = Size(s * 1.04f, s * 0.84f),
                 style = Stroke(width = 4f)
             )
         }
 
-        // === FISTIK KABUĞU ===
-        // Gölge
+        // === GÖLGE ===
         drawOval(
             color = Color.Black.copy(alpha = 0.3f),
-            topLeft = Offset(x - s * 0.44f + 5f, y - s * 0.32f + 5f),
-            size = Size(s * 0.88f, s * 0.64f)
+            topLeft = Offset(x - s * 0.38f + 4f, y - s * 0.35f + 5f),
+            size = Size(s * 0.76f, s * 0.72f)
         )
 
-        // Kabuk dış kontur (koyu kahve kenar)
+        // === ÜST LOB (üst şişkinlik) ===
         drawOval(
-            color = Color(0xFF6B4513),
-            topLeft = Offset(x - s * 0.46f, y - s * 0.34f),
-            size = Size(s * 0.92f, s * 0.68f)
+            color = Color(0xFFC4956A),  // Fıstık kabuğu ana renk
+            topLeft = Offset(x - s * 0.32f, y - s * 0.38f),
+            size = Size(s * 0.58f, s * 0.42f)
         )
 
-        // Kabuk ana gövde (sıcak bej - fıstık kabuğu rengi)
+        // Üst lob açık ton
         drawOval(
-            color = Color(0xFFD4A862),
-            topLeft = Offset(x - s * 0.42f, y - s * 0.3f),
-            size = Size(s * 0.84f, s * 0.6f)
+            color = Color(0xFFD4A87A).copy(alpha = 0.7f),
+            topLeft = Offset(x - s * 0.24f, y - s * 0.32f),
+            size = Size(s * 0.42f, s * 0.28f)
         )
 
-        // Kabuk üst açık ton
+        // === ALT LOB (alt şişkinlik - biraz daha büyük) ===
         drawOval(
-            color = Color(0xFFE8C88A).copy(alpha = 0.7f),
-            topLeft = Offset(x - s * 0.34f, y - s * 0.24f),
-            size = Size(s * 0.6f, s * 0.38f)
+            color = Color(0xFFC4956A),
+            topLeft = Offset(x - s * 0.36f, y - s * 0.04f),
+            size = Size(s * 0.65f, s * 0.46f)
         )
 
-        // Kabuk doku çizgileri (dikey ince çizgiler - gerçekçi kabuk dokusu)
-        val lineColor = Color(0xFFB8894A).copy(alpha = 0.4f)
-        for (i in -2..2) {
-            val offsetX = i * s * 0.08f
+        // Alt lob açık ton
+        drawOval(
+            color = Color(0xFFD4A87A).copy(alpha = 0.7f),
+            topLeft = Offset(x - s * 0.28f, y + s * 0.02f),
+            size = Size(s * 0.48f, s * 0.32f)
+        )
+
+        // === ORTA BAĞLANTI (iki lob arası daralan kısım) ===
+        drawOval(
+            color = Color(0xFFB8845A),
+            topLeft = Offset(x - s * 0.2f, y - s * 0.08f),
+            size = Size(s * 0.38f, s * 0.18f)
+        )
+
+        // === DIŞ KONTUR (koyu kenar - tüm fıstık etrafında) ===
+        // Üst lob kontur
+        drawOval(
+            color = Color(0xFF7A5230),
+            topLeft = Offset(x - s * 0.32f, y - s * 0.38f),
+            size = Size(s * 0.58f, s * 0.42f),
+            style = Stroke(width = 2.5f)
+        )
+        // Alt lob kontur
+        drawOval(
+            color = Color(0xFF7A5230),
+            topLeft = Offset(x - s * 0.36f, y - s * 0.04f),
+            size = Size(s * 0.65f, s * 0.46f),
+            style = Stroke(width = 2.5f)
+        )
+
+        // === IZGARA DOKU ÇİZGİLERİ (kabuk dokusu) ===
+        val gridColor = Color(0xFF9A6B42).copy(alpha = 0.5f)
+
+        // Yatay çizgiler
+        for (i in -3..3) {
+            val lineY = y + i * s * 0.09f
+            val width = if (i.absoluteValue <= 1) s * 0.5f else s * 0.35f
             drawLine(
-                color = lineColor,
-                start = Offset(x + offsetX, y - s * 0.2f),
-                end = Offset(x + offsetX + s * 0.02f, y + s * 0.18f),
-                strokeWidth = 1.5f
+                color = gridColor,
+                start = Offset(x - width * 0.5f, lineY),
+                end = Offset(x + width * 0.5f, lineY),
+                strokeWidth = 1.2f
             )
         }
 
-        // === FISTIK ÇATLAĞI (açık yarık) ===
-        // Koyu çatlak çizgisi
-        drawArc(
-            color = Color(0xFF3D2810),
-            startAngle = -20f,
-            sweepAngle = 40f,
-            useCenter = false,
-            topLeft = Offset(x - s * 0.3f, y - s * 0.05f),
-            size = Size(s * 0.6f, s * 0.2f),
-            style = Stroke(width = 3.5f)
-        )
+        // Dikey çizgiler (çapraz hafif)
+        for (i in -2..2) {
+            val lineX = x + i * s * 0.1f
+            val startY = y - s * 0.28f
+            val endY = y + s * 0.3f
+            drawLine(
+                color = gridColor,
+                start = Offset(lineX, startY),
+                end = Offset(lineX + s * 0.02f, endY),
+                strokeWidth = 1.2f
+            )
+        }
 
-        // === YEŞİL İÇ KISIM (fıstığın kendisi - çatlaktan görünen) ===
-        drawOval(
-            color = Color(0xFF4CAF50),
-            topLeft = Offset(x - s * 0.2f, y - s * 0.02f),
-            size = Size(s * 0.4f, s * 0.18f)
-        )
-
-        // Yeşil iç parlama
-        drawOval(
-            color = Color(0xFF81C784).copy(alpha = 0.7f),
-            topLeft = Offset(x - s * 0.12f, y + s * 0.01f),
-            size = Size(s * 0.22f, s * 0.09f)
-        )
-
-        // Kabuk ışık yansıması (üst sol)
+        // === IŞIK YANSIMALARI ===
+        // Üst lob parlama
         drawCircle(
-            color = Color.White.copy(alpha = 0.35f),
-            radius = s * 0.07f,
-            center = Offset(x - s * 0.18f, y - s * 0.16f)
+            color = Color.White.copy(alpha = 0.3f),
+            radius = s * 0.06f,
+            center = Offset(x - s * 0.1f, y - s * 0.24f)
         )
 
-        // İkinci küçük parlama
+        // Alt lob parlama
         drawCircle(
-            color = Color.White.copy(alpha = 0.2f),
-            radius = s * 0.04f,
-            center = Offset(x - s * 0.08f, y - s * 0.2f)
+            color = Color.White.copy(alpha = 0.25f),
+            radius = s * 0.05f,
+            center = Offset(x - s * 0.08f, y + s * 0.12f)
+        )
+
+        // === FISTIK UCU (alt kısımda küçük sivri uç) ===
+        val tipPath = Path().apply {
+            moveTo(x - s * 0.05f, y + s * 0.38f)
+            lineTo(x, y + s * 0.44f)
+            lineTo(x + s * 0.05f, y + s * 0.38f)
+            close()
+        }
+        drawPath(
+            path = tipPath,
+            color = Color(0xFFAA7744)
         )
     }
 }

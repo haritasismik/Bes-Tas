@@ -42,13 +42,19 @@ class SoundManager(private val context: Context) {
             .build()
 
         soundPool = SoundPool.Builder()
-            .setMaxStreams(6)
+            .setMaxStreams(8)
             .setAudioAttributes(audioAttributes)
             .build()
 
-        // Ses dosyaları henüz placeholder - gerçek .ogg dosyaları eklenince yüklenecek
+        // Ses dosyaları eklenince burası aktif edilecek
         // loadSounds()
     }
+
+    /** Taş/fıstık çarpma sesi (serpme sırasında) */
+    fun playCollide() { playSound(stoneCollideId, volume = soundVolume * 0.6f) }
+
+    /** Kenara çarpma sesi */
+    fun playWallBounce() { playSound(stoneDropId, volume = soundVolume * 0.4f) }
 
     fun playThrow() { playSound(stoneThrowId) }
     fun playCatch() { playSound(stoneCatchId) }

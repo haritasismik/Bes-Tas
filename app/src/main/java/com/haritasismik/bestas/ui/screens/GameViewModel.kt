@@ -70,6 +70,21 @@ class GameViewModel : ViewModel() {
         if (stone.isPickedUp) return
         if (stone.isInAir) return
 
+        // KÖPRÜ: Ebe seçimi (karşı oyuncu seçer - yerel oyunda aynı kişi seçer)
+        if (state.currentRound == GameRound.BRIDGE && state.bridgePhase == BridgePhase.SELECT_EBE) {
+            if (stoneId == state.henekeId) {
+                _message.value = "Heneke ebe olamaz! Başka taş seç."
+                return
+            }
+            _gameState.value = state.copy(
+                ebeStoneId = stoneId,
+                isEbeSelected = true,
+                bridgePhase = BridgePhase.PASS_STONES
+            )
+            _message.value = "Ebe seçildi! 🎯 Heneke seç ve taşları köprüden geçir!"
+            return
+        }
+
         // ADIM 1: Heneke seçimi (oyunun başında)
         if (!state.isHenekeSelected) {
             val newState = engine.selectHeneke(state, stoneId)
@@ -109,6 +124,18 @@ class GameViewModel : ViewModel() {
 
     fun onBoardClicked(position: Position) {
         val state = _gameState.value
+
+        // Köprü yerleştirme (5'ler turunda)
+        if (state.currentRound == GameRound.BRIDGE && state.bridgePhase == BridgePhase.PLACE_BRIDGE) {
+            _gameState.value = state.copy(
+                bridgePosition = position,
+                isBridgePlaced = true,
+                bridgePhase = BridgePhase.SELECT_EBE
+            )
+            _message.value = "Köprü yerleştirildi! Karşı oyuncu ebe seçsin. 🎯"
+            return
+        }
+
         if (state.thrownStone == null && state.isHenekeSelected) {
             _message.value = "Henekeyi fırlatmak için 'Fırlat' butonuna bas!"
         }
@@ -142,20 +169,36 @@ class GameViewModel : ViewModel() {
     }
 
     /**
-     * Taşları serpme - butonla veya sallama ile
+     * Taşları serpme - butonla, doğal fizik ile kenarlara çarpma + ses
      */
     fun scatterStones() {
         viewModelScope.launch {
             _isScattering.value = true
             _message.value = "Taşlar serpiliyor..."
 
-            // Kısa animasyon beklemesi
-            delay(600)
-
+            // Fiziksel serpme: taşlar merkeze atılır, kenarlara çarpar, birbirine çarpar
             val state = _gameState.value
-            val newStones = engine.scatterStones()
+            val finalStones = engine.scatterStones()
+
+            // Animasyon: taşlar sırayla yere düşer (smooth efekt)
+            for (i in finalStones.indices) {
+                delay(120)  // Her taş arası küçük gecikme
+                val partialStones = finalStones.take(i + 1) +
+                    List(4 - i) { idx ->
+                        Stone(id = i + 1 + idx, position = Position(500f, 300f), isPickedUp = true)
+                    }
+
+                _gameState.value = state.copy(
+                    stones = finalStones.mapIndexed { index, stone ->
+                        if (index <= i) stone else stone.copy(isPickedUp = true)
+                    }
+                )
+            }
+
+            // Son durumu göster (tüm taşlar görünür)
+            delay(200)
             _gameState.value = state.copy(
-                stones = newStones,
+                stones = finalStones,
                 henekeId = null,
                 isHenekeSelected = false,
                 thrownStone = null,
@@ -277,20 +320,52 @@ class GameViewModel : ViewModel() {
             return
         }
 
-        // Yerde hala taş var mı?
+        // Köprü modunda özel davranış
+        if (state.currentRound == GameRound.BRIDGE) {
+            when (state.bridgePhase) {
+                BridgePhase.PASS_STONES -> {
+                    val remaining = state.bridgePassableStones.size
+                    if (remaining == 0) {
+                        // Tüm normal taşlar geçirildi → sıra ebeye
+                        _gameState.value = state.copy(bridgePhase = BridgePhase.PASS_EBE)
+                        _message.value = "Son adım! Ebeyi köprüden geçir! ⚠️"
+                    } else {
+                        _message.value = "$remaining taş kaldı. Fırlat ve köprüden geçir!"
+                    }
+                }
+                BridgePhase.PASS_EBE -> {
+                    // Ebe başarıyla geçirildi → oyunu kazandı!
+                    val updatedPlayer = if (state.isPlayer1Turn) {
+                        state.player1.copy(score = state.player1.score + 1)
+                    } else {
+                        state.player2.copy(score = state.player2.score + 1)
+                    }
+                    _gameState.value = state.copy(
+                        player1 = if (state.isPlayer1Turn) updatedPlayer else state.player1,
+                        player2 = if (!state.isPlayer1Turn) updatedPlayer else state.player2,
+                        isGameOver = true,
+                        winnerId = state.currentPlayerId,
+                        bridgePhase = BridgePhase.COMPLETE
+                    )
+                    _message.value = "${state.currentPlayer.name} kazandı! 🏆🎉"
+                }
+                else -> {}
+            }
+            return
+        }
+
+        // Normal modlar
         val remaining = state.groundStones.size
         if (remaining == 0) {
-            // Tur zaten tamamlandı (pickUpStones'da handle edildi)
-            // Yeni tur başladı
-            if (state.currentRound == GameRound.ONES) {
-                _message.value = "Birler bitti! → ${state.currentRound.displayName}. Fırlat!"
-            } else {
-                _message.value = "${state.currentRound.displayName} turu. Fırlat!"
+            _message.value = "Tur geçti! → ${state.currentRound.displayName}. Heneke seç!"
+            // Köprü turuna geçiş kontrolü
+            if (state.currentRound == GameRound.BRIDGE) {
+                _gameState.value = state.copy(bridgePhase = BridgePhase.PLACE_BRIDGE)
+                _message.value = "Köprü turu! Ekrana dokunarak köprünü yerleştir. 🤚"
             }
             checkAITurn(state)
         } else {
-            // Aynı turda devam - henekeyi tekrar at
-            _message.value = "$remaining taş kaldı. Henekeyi tekrar fırlat!"
+            _message.value = "$remaining taş kaldı. Fırlat!"
         }
     }
 

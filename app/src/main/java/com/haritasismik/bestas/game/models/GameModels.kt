@@ -93,7 +93,13 @@ data class GameState(
     val gameMode: GameMode = GameMode.LOCAL,
     val stoneStyle: StoneStyle = StoneStyle.REALISTIC,
     val stonesPickedThisTurn: Int = 0,
-    val consecutiveSuccesses: Int = 0
+    val consecutiveSuccesses: Int = 0,
+    // Köprü modu alanları
+    val bridgePosition: Position? = null,  // Köprü (el) konumu
+    val isBridgePlaced: Boolean = false,   // Köprü yerleştirildi mi?
+    val ebeStoneId: Int? = null,           // Ebe taşı (karşı oyuncu seçer)
+    val isEbeSelected: Boolean = false,    // Ebe seçildi mi?
+    val bridgePhase: BridgePhase = BridgePhase.NONE  // Köprü aşaması
 ) {
     val currentPlayer: Player
         get() = if (currentPlayerId == player1.id) player1 else player2
@@ -107,6 +113,22 @@ data class GameState(
     /** Yerdeki toplanabilir taşlar (heneke ve toplananlar hariç) */
     val groundStones: List<Stone>
         get() = stones.filter { !it.isPickedUp && !it.isInAir && it.id != henekeId }
+
+    /** Köprü modunda geçirilecek taşlar (ebe hariç) */
+    val bridgePassableStones: List<Stone>
+        get() = groundStones.filter { it.id != ebeStoneId }
+}
+
+/**
+ * Köprü turu aşamaları
+ */
+enum class BridgePhase {
+    NONE,              // Normal tur (köprü değil)
+    PLACE_BRIDGE,      // Oyuncu köprüyü yerleştiriyor
+    SELECT_EBE,        // Karşı oyuncu ebe seçiyor
+    PASS_STONES,       // Taşları köprü altından geçirme
+    PASS_EBE,          // Son: Ebeyi geçirme
+    COMPLETE           // Tamamlandı
 }
 
 /**

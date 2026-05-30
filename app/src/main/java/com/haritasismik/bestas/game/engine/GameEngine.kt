@@ -27,7 +27,7 @@ class GameEngine {
         const val STONE_SIZE = 95f          // Büyütüldü (60 → 95)
         const val TOUCH_RADIUS = 110f       // Dokunma yarıçapı büyütüldü
         const val PROXIMITY_LIMIT = 130f    // Yakınlık limiti büyütüldü
-        const val HENEKE_FALL_TIME_MS = 2500L  // Heneke havada kalma süresi (ms)
+        const val HENEKE_FALL_TIME_MS = 1200L  // Doğal taş atış süresi (1.2 saniye)
         val SCATTER_AREA_X = 120f..880f
         val SCATTER_AREA_Y = 450f..1150f
     }
@@ -65,37 +65,59 @@ class GameEngine {
 
     /**
      * Taşları fiziksel olarak serpiştirir - doğal dağılım, kenara çarpma
-     * Taşlar minimum mesafe ile dağılır, kenarlara yaklaşırsa geri seker
+     * Fizik simülasyonu: Taşlar fırlatılır, kenarlara çarpar, geri seker
      */
     fun scatterStones(): List<Stone> {
         val positions = mutableListOf<Position>()
-        val minDistance = STONE_SIZE * 1.5f  // Minimum mesafe (büyük taşlar için)
+        val minDistance = STONE_SIZE * 1.8f  // Taşlar arası minimum mesafe
 
         for (i in 0 until 5) {
             var attempts = 0
             var pos: Position
             do {
-                // Rastgele bir yön ve hız ile "fırlat"
+                // Fizik simülasyonu: merkez noktadan rastgele açı ve hızla fırlat
                 val centerX = BOARD_WIDTH / 2
                 val centerY = (SCATTER_AREA_Y.start + SCATTER_AREA_Y.endInclusive) / 2
 
-                // Merkeze göre rastgele yönde dağıt
+                // Rastgele yön
                 val angle = Random.nextFloat() * 2f * Math.PI.toFloat()
-                val distance = Random.nextFloat() * 250f + 100f
+                val speed = Random.nextFloat() * 300f + 150f
 
-                var x = centerX + cos(angle) * distance
-                var y = centerY + sin(angle) * distance
+                // Başlangıç pozisyonu (biraz salınımlı)
+                var x = centerX + cos(angle) * speed
+                var y = centerY + sin(angle) * speed * 0.7f
 
-                // Kenara çarpma - geri sekme
-                val margin = STONE_SIZE * 0.8f
-                if (x < SCATTER_AREA_X.start + margin) x = SCATTER_AREA_X.start + margin + Random.nextFloat() * 50f
-                if (x > SCATTER_AREA_X.endInclusive - margin) x = SCATTER_AREA_X.endInclusive - margin - Random.nextFloat() * 50f
-                if (y < SCATTER_AREA_Y.start + margin) y = SCATTER_AREA_Y.start + margin + Random.nextFloat() * 50f
-                if (y > SCATTER_AREA_Y.endInclusive - margin) y = SCATTER_AREA_Y.endInclusive - margin - Random.nextFloat() * 50f
+                // Kenar çarpması simülasyonu (bounce)
+                val margin = STONE_SIZE
+                val leftWall = SCATTER_AREA_X.start + margin
+                val rightWall = SCATTER_AREA_X.endInclusive - margin
+                val topWall = SCATTER_AREA_Y.start + margin
+                val bottomWall = SCATTER_AREA_Y.endInclusive - margin
+
+                // Soldan çarpma - geri sekme
+                if (x < leftWall) {
+                    x = leftWall + (leftWall - x) * 0.4f  // %40 enerji ile geri seker
+                    x = x.coerceIn(leftWall, rightWall)
+                }
+                // Sağdan çarpma
+                if (x > rightWall) {
+                    x = rightWall - (x - rightWall) * 0.4f
+                    x = x.coerceIn(leftWall, rightWall)
+                }
+                // Üstten çarpma
+                if (y < topWall) {
+                    y = topWall + (topWall - y) * 0.4f
+                    y = y.coerceIn(topWall, bottomWall)
+                }
+                // Alttan çarpma
+                if (y > bottomWall) {
+                    y = bottomWall - (y - bottomWall) * 0.4f
+                    y = y.coerceIn(topWall, bottomWall)
+                }
 
                 pos = Position(x, y)
                 attempts++
-            } while (attempts < 80 && positions.any { distanceBetween(it, pos) < minDistance })
+            } while (attempts < 100 && positions.any { distanceBetween(it, pos) < minDistance })
 
             positions.add(pos)
         }
@@ -267,9 +289,13 @@ class GameEngine {
             )
         }
 
-        // Sonraki tura geç - taşlar yeniden dağıtılır, heneke aynı kalır
-        val newStones = scatterStones().mapIndexed { index, stone ->
-            if (index == state.henekeId) stone.copy(isHeneke = true) else stone
+        // Sonraki tura geç - taşlar yeniden dağıtılır, heneke yeniden seçilecek
+        val newStones = scatterStones()
+
+        val bridgePhase = if (nextRound == GameRound.BRIDGE) {
+            BridgePhase.PLACE_BRIDGE
+        } else {
+            BridgePhase.NONE
         }
 
         return state.copy(
@@ -277,7 +303,14 @@ class GameEngine {
             stones = newStones,
             thrownStone = null,
             stonesPickedThisTurn = 0,
-            consecutiveSuccesses = state.consecutiveSuccesses + 1
+            consecutiveSuccesses = state.consecutiveSuccesses + 1,
+            henekeId = null,
+            isHenekeSelected = false,
+            bridgePhase = bridgePhase,
+            bridgePosition = null,
+            isBridgePlaced = false,
+            ebeStoneId = null,
+            isEbeSelected = false
         )
     }
 
