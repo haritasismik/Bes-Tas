@@ -2,6 +2,7 @@ package com.haritasismik.bestas.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -17,40 +18,34 @@ import com.haritasismik.bestas.game.models.*
 import kotlin.math.*
 
 /**
- * Oyun tahtası - Canvas ile gerçekçi çizim + animasyonlar
+ * Oyun tahtası - parmakla çizme mekanizması + gerçekçi fıstık/taş
  */
 @Composable
 fun GameBoard(
     gameState: GameState,
     onStoneClicked: (Int) -> Unit,
     onBoardClicked: (Position) -> Unit,
+    onSwipeStones: (List<Int>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Havadaki taş animasyonu
-    val throwAnim = rememberThrowAnimation(
-        isActive = gameState.thrownStone != null,
-        startPosition = Offset(500f, 700f)
-    )
+    // Çizme yolu (swipe sırasında parmağın geçtiği taşlar)
+    var swipePath by remember { mutableStateOf(listOf<Offset>()) }
+    var swipedStoneIds by remember { mutableStateOf(setOf<Int>()) }
+    var isDragging by remember { mutableStateOf(false) }
 
-    // Sparkle efekti (başarılı toplama sonrası)
-    val sparkle = rememberSparkleAnimation(
-        isActive = gameState.stonesPickedThisTurn > 0
-    )
-
-    // Taş seçim animasyonu
-    val infiniteTransition = rememberInfiniteTransition(label = "stone_anim")
-    @Suppress("UNUSED_VARIABLE")
-    val selectedGlow by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
+    // Havadaki heneke animasyonu
+    val infiniteTransition = rememberInfiniteTransition(label = "board_anim")
+    val henekeBounce by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "glow"
+        label = "heneke_bounce"
     )
 
-    // Arka plan partikülleri (toz efekti)
+    // Arka plan toz partikülleri
     val dustParticles by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -72,13 +67,13 @@ fun GameBoard(
                     val scaleY = boardHeight / GameEngine.BOARD_HEIGHT
 
                     val clickedStone = gameState.stones
-                        .filter { !it.isPickedUp }
+                        .filter { !it.isPickedUp && !it.isInAir }
                         .find { stone ->
                             val stoneX = stone.position.x * scaleX
                             val stoneY = stone.position.y * scaleY
                             val dx = offset.x - stoneX
                             val dy = offset.y - stoneY
-                            (dx * dx + dy * dy) < (GameEngine.STONE_SIZE * scaleX * 1.5f).let { it * it }
+                            (dx * dx + dy * dy) < (GameEngine.TOUCH_RADIUS * scaleX).let { it * it }
                         }
 
                     if (clickedStone != null) {
@@ -92,16 +87,62 @@ fun GameBoard(
                     }
                 }
             }
+            .pointerInput(gameState) {
+                // Parmakla çizme (swipe) - taş toplama
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        swipePath = listOf(offset)
+                        swipedStoneIds = emptySet()
+                        isDragging = true
+                    },
+                    onDrag = { change, _ ->
+                        val pos = change.position
+                        swipePath = swipePath + pos
+
+                        // Parmak bir taşın üzerinden geçti mi?
+                        val boardWidth = size.width.toFloat()
+                        val boardHeight = size.height.toFloat()
+                        val scaleX = boardWidth / GameEngine.BOARD_WIDTH
+                        val scaleY = boardHeight / GameEngine.BOARD_HEIGHT
+
+                        gameState.stones
+                            .filter { !it.isPickedUp && !it.isInAir && it.id != gameState.henekeId }
+                            .forEach { stone ->
+                                val stoneX = stone.position.x * scaleX
+                                val stoneY = stone.position.y * scaleY
+                                val dx = pos.x - stoneX
+                                val dy = pos.y - stoneY
+                                val dist = sqrt(dx * dx + dy * dy)
+                                if (dist < GameEngine.TOUCH_RADIUS * scaleX) {
+                                    swipedStoneIds = swipedStoneIds + stone.id
+                                }
+                            }
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        if (swipedStoneIds.isNotEmpty()) {
+                            onSwipeStones(swipedStoneIds.toList())
+                        }
+                        swipePath = emptyList()
+                        swipedStoneIds = emptySet()
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        swipePath = emptyList()
+                        swipedStoneIds = emptySet()
+                    }
+                )
+            }
     ) {
         val boardWidth = size.width
         val boardHeight = size.height
         val scaleX = boardWidth / GameEngine.BOARD_WIDTH
         val scaleY = boardHeight / GameEngine.BOARD_HEIGHT
 
-        // Ahşap zemin çiz
+        // Ahşap zemin
         drawWoodenFloor(boardWidth, boardHeight)
 
-        // Toz partikülleri
+        // Toz efekti
         drawDustParticles(boardWidth, boardHeight, dustParticles)
 
         // Taşları çiz
@@ -112,224 +153,248 @@ fun GameBoard(
 
                 val x: Float
                 val y: Float
-                val currentRotation: Float
-                val currentScale: Float
-                val currentAlpha: Float
 
-                if (stone.isInAir && throwAnim.isAnimating) {
-                    // Havadaki taş - parabolik animasyon
+                if (stone.isInAir) {
+                    // Heneke havada - yukarıda zıplıyor
                     x = baseX
-                    y = baseY + throwAnim.yOffset
-                    currentRotation = stone.rotation + throwAnim.rotation
-                    currentScale = throwAnim.scale
-                    currentAlpha = 1f
-                } else if (stone.isInAir) {
-                    // Havada ama animasyon bitti - üstte sabit
-                    x = baseX
-                    y = baseY - 300f
-                    currentRotation = stone.rotation
-                    currentScale = 0.9f
-                    currentAlpha = 1f
+                    y = 80f + henekeBounce * 40f
 
-                    // Gölge çiz (havadayken)
-                    drawCircle(
-                        color = Color.Black.copy(alpha = 0.25f),
-                        radius = GameEngine.STONE_SIZE * scaleX * 0.4f,
-                        center = Offset(baseX + 5f, baseY + 5f)
+                    // Gölge (yerde)
+                    drawOval(
+                        color = Color.Black.copy(alpha = 0.2f),
+                        topLeft = Offset(baseX - 30f, baseY - 15f),
+                        size = Size(60f, 30f)
                     )
                 } else {
                     x = baseX
                     y = baseY
-                    currentRotation = stone.rotation
-                    currentScale = 1f
-                    currentAlpha = 1f
                 }
 
-                // Taşı çiz
-                drawStoneWithEffects(
-                    x = x,
-                    y = y,
-                    rotation = currentRotation,
-                    scale = currentScale * scaleX,
-                    alpha = currentAlpha,
-                    stoneStyle = gameState.stoneStyle,
-                    isInAir = stone.isInAir
-                )
+                // Swipe sırasında seçilen taşlara parlama efekti
+                val isHighlighted = stone.id in swipedStoneIds
 
-                // Sparkle efekti (yakında toplanan taş varsa)
-                if (sparkle.isActive && !stone.isInAir) {
-                    drawSparkle(x, y, sparkle.alpha, sparkle.scale, scaleX)
+                when (gameState.stoneStyle) {
+                    StoneStyle.REALISTIC -> drawRealisticStone(x, y, stone.rotation, scaleX, stone.isHeneke, isHighlighted)
+                    StoneStyle.PISTACHIO -> drawRealisticPistachio(x, y, stone.rotation, scaleX, stone.isHeneke, isHighlighted)
                 }
             }
         }
 
-        // Havadaki taşın gölgesi (animasyon sırasında)
-        if (throwAnim.isAnimating) {
-            gameState.thrownStone?.let { thrown ->
-                val shadowX = thrown.position.x * scaleX
-                val shadowY = thrown.position.y * scaleY
-                val shadowAlpha = 0.3f * (1f - throwAnim.progress * 0.5f)
-                drawOval(
-                    color = Color.Black.copy(alpha = shadowAlpha),
-                    topLeft = Offset(shadowX - 20f, shadowY - 10f),
-                    size = Size(40f, 20f)
-                )
+        // Swipe çizgisi (parmağın geçtiği yol)
+        if (isDragging && swipePath.size > 1) {
+            val path = Path().apply {
+                moveTo(swipePath.first().x, swipePath.first().y)
+                for (i in 1 until swipePath.size) {
+                    lineTo(swipePath[i].x, swipePath[i].y)
+                }
             }
+            drawPath(
+                path = path,
+                color = Color(0xFFFFD700).copy(alpha = 0.6f),
+                style = Stroke(
+                    width = 6f,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
         }
     }
 }
 
 /**
- * Taşı efektlerle çiz
+ * Gerçekçi taş çizimi (büyük)
  */
-private fun DrawScope.drawStoneWithEffects(
-    x: Float,
-    y: Float,
-    rotation: Float,
-    scale: Float,
-    alpha: Float,
-    stoneStyle: StoneStyle,
-    isInAir: Boolean
+private fun DrawScope.drawRealisticStone(
+    x: Float, y: Float, rotation: Float, scale: Float,
+    isHeneke: Boolean, isHighlighted: Boolean
 ) {
     val stoneSize = GameEngine.STONE_SIZE * scale
 
     rotate(rotation, pivot = Offset(x, y)) {
-        when (stoneStyle) {
-            StoneStyle.REALISTIC -> {
-                // Gölge (yerdeyken)
-                if (!isInAir) {
-                    drawOval(
-                        color = Color.Black.copy(alpha = 0.2f * alpha),
-                        topLeft = Offset(x - stoneSize * 0.4f + 4f, y - stoneSize * 0.25f + 4f),
-                        size = Size(stoneSize * 0.8f, stoneSize * 0.55f)
-                    )
-                }
-
-                // Ana taş gövdesi - gradient efekti
-                drawOval(
-                    color = Color(0xFF6B6B6B).copy(alpha = alpha),
-                    topLeft = Offset(x - stoneSize * 0.4f, y - stoneSize * 0.3f),
-                    size = Size(stoneSize * 0.8f, stoneSize * 0.6f)
-                )
-
-                // Üst katman - daha açık
-                drawOval(
-                    color = Color(0xFF8A8A8A).copy(alpha = 0.7f * alpha),
-                    topLeft = Offset(x - stoneSize * 0.35f, y - stoneSize * 0.25f),
-                    size = Size(stoneSize * 0.7f, stoneSize * 0.45f)
-                )
-
-                // Işık yansıması
-                drawOval(
-                    color = Color(0xFFB0B0B0).copy(alpha = 0.4f * alpha),
-                    topLeft = Offset(x - stoneSize * 0.2f, y - stoneSize * 0.18f),
-                    size = Size(stoneSize * 0.35f, stoneSize * 0.2f)
-                )
-
-                // Parlak nokta
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.35f * alpha),
-                    radius = stoneSize * 0.07f,
-                    center = Offset(x - stoneSize * 0.08f, y - stoneSize * 0.1f)
-                )
-
-                // Doku çizgileri
-                drawLine(
-                    color = Color(0xFF555555).copy(alpha = 0.2f * alpha),
-                    start = Offset(x - stoneSize * 0.2f, y),
-                    end = Offset(x + stoneSize * 0.15f, y - stoneSize * 0.05f),
-                    strokeWidth = 1f
-                )
-            }
-
-            StoneStyle.PISTACHIO -> {
-                // Gölge (yerdeyken) - zeminden ayrışması için belirgin
-                if (!isInAir) {
-                    drawOval(
-                        color = Color.Black.copy(alpha = 0.35f * alpha),
-                        topLeft = Offset(x - stoneSize * 0.4f + 4f, y - stoneSize * 0.28f + 5f),
-                        size = Size(stoneSize * 0.8f, stoneSize * 0.55f)
-                    )
-                }
-
-                // Koyu dış hat (ahşap zeminden ayrışması için kontur)
-                drawOval(
-                    color = Color(0xFF5A3D1A).copy(alpha = alpha),
-                    topLeft = Offset(x - stoneSize * 0.42f, y - stoneSize * 0.3f),
-                    size = Size(stoneSize * 0.84f, stoneSize * 0.6f)
-                )
-
-                // Kabuk - daha sıcak/parlak bej (kontrastlı)
-                drawOval(
-                    color = Color(0xFFEBC88A).copy(alpha = alpha),
-                    topLeft = Offset(x - stoneSize * 0.38f, y - stoneSize * 0.27f),
-                    size = Size(stoneSize * 0.76f, stoneSize * 0.54f)
-                )
-
-                // Kabuk üst parlama (3D hacim hissi)
-                drawOval(
-                    color = Color(0xFFF7E2B0).copy(alpha = 0.7f * alpha),
-                    topLeft = Offset(x - stoneSize * 0.3f, y - stoneSize * 0.22f),
-                    size = Size(stoneSize * 0.5f, stoneSize * 0.28f)
-                )
-
-                // Açık yarık - fıstığın çatlağı (koyu, belirgin)
-                drawLine(
-                    color = Color(0xFF3A2810).copy(alpha = 0.9f * alpha),
-                    start = Offset(x - stoneSize * 0.22f, y + stoneSize * 0.04f),
-                    end = Offset(x + stoneSize * 0.22f, y + stoneSize * 0.04f),
-                    strokeWidth = 3f
-                )
-
-                // Yeşil iç kısım (fıstığın kendisi) - canlı yeşil, büyük ve net
-                drawOval(
-                    color = Color(0xFF6FA82E).copy(alpha = alpha),
-                    topLeft = Offset(x - stoneSize * 0.18f, y - stoneSize * 0.06f),
-                    size = Size(stoneSize * 0.36f, stoneSize * 0.22f)
-                )
-
-                // Yeşil iç üst parlama
-                drawOval(
-                    color = Color(0xFFAEDD5E).copy(alpha = 0.6f * alpha),
-                    topLeft = Offset(x - stoneSize * 0.12f, y - stoneSize * 0.04f),
-                    size = Size(stoneSize * 0.18f, stoneSize * 0.1f)
-                )
-
-                // Kabuk parlak nokta (ışık yansıması)
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.4f * alpha),
-                    radius = stoneSize * 0.06f,
-                    center = Offset(x - stoneSize * 0.16f, y - stoneSize * 0.14f)
-                )
-            }
+        // Seçim parlaması
+        if (isHighlighted) {
+            drawOval(
+                color = Color(0xFFFFD700).copy(alpha = 0.4f),
+                topLeft = Offset(x - stoneSize * 0.5f, y - stoneSize * 0.4f),
+                size = Size(stoneSize * 1f, stoneSize * 0.8f)
+            )
         }
+
+        // Heneke işareti (altın halka)
+        if (isHeneke) {
+            drawOval(
+                color = Color(0xFFFFD700).copy(alpha = 0.6f),
+                topLeft = Offset(x - stoneSize * 0.48f, y - stoneSize * 0.38f),
+                size = Size(stoneSize * 0.96f, stoneSize * 0.76f),
+                style = Stroke(width = 4f)
+            )
+        }
+
+        // Gölge
+        drawOval(
+            color = Color.Black.copy(alpha = 0.25f),
+            topLeft = Offset(x - stoneSize * 0.42f + 5f, y - stoneSize * 0.3f + 5f),
+            size = Size(stoneSize * 0.84f, stoneSize * 0.62f)
+        )
+
+        // Ana taş gövdesi
+        drawOval(
+            color = Color(0xFF5A5A5A),
+            topLeft = Offset(x - stoneSize * 0.42f, y - stoneSize * 0.32f),
+            size = Size(stoneSize * 0.84f, stoneSize * 0.64f)
+        )
+
+        // Orta katman
+        drawOval(
+            color = Color(0xFF787878),
+            topLeft = Offset(x - stoneSize * 0.36f, y - stoneSize * 0.26f),
+            size = Size(stoneSize * 0.72f, stoneSize * 0.5f)
+        )
+
+        // Işık yansıması
+        drawOval(
+            color = Color(0xFFA0A0A0).copy(alpha = 0.5f),
+            topLeft = Offset(x - stoneSize * 0.22f, y - stoneSize * 0.2f),
+            size = Size(stoneSize * 0.4f, stoneSize * 0.22f)
+        )
+
+        // Parlak nokta
+        drawCircle(
+            color = Color.White.copy(alpha = 0.4f),
+            radius = stoneSize * 0.07f,
+            center = Offset(x - stoneSize * 0.1f, y - stoneSize * 0.12f)
+        )
     }
 }
 
 /**
- * Ahşap zemin çizimi - geliştirilmiş versiyon
+ * Gerçekçi fıstık çizimi - fıstık kabuğu şeklinde (büyük, detaylı)
+ */
+private fun DrawScope.drawRealisticPistachio(
+    x: Float, y: Float, rotation: Float, scale: Float,
+    isHeneke: Boolean, isHighlighted: Boolean
+) {
+    val s = GameEngine.STONE_SIZE * scale
+
+    rotate(rotation, pivot = Offset(x, y)) {
+        // Seçim parlaması
+        if (isHighlighted) {
+            drawOval(
+                color = Color(0xFFFFD700).copy(alpha = 0.4f),
+                topLeft = Offset(x - s * 0.55f, y - s * 0.42f),
+                size = Size(s * 1.1f, s * 0.84f)
+            )
+        }
+
+        // Heneke işareti
+        if (isHeneke) {
+            drawOval(
+                color = Color(0xFFFFD700).copy(alpha = 0.7f),
+                topLeft = Offset(x - s * 0.52f, y - s * 0.4f),
+                size = Size(s * 1.04f, s * 0.8f),
+                style = Stroke(width = 4f)
+            )
+        }
+
+        // === FISTIK KABUĞU ===
+        // Gölge
+        drawOval(
+            color = Color.Black.copy(alpha = 0.3f),
+            topLeft = Offset(x - s * 0.44f + 5f, y - s * 0.32f + 5f),
+            size = Size(s * 0.88f, s * 0.64f)
+        )
+
+        // Kabuk dış kontur (koyu kahve kenar)
+        drawOval(
+            color = Color(0xFF6B4513),
+            topLeft = Offset(x - s * 0.46f, y - s * 0.34f),
+            size = Size(s * 0.92f, s * 0.68f)
+        )
+
+        // Kabuk ana gövde (sıcak bej - fıstık kabuğu rengi)
+        drawOval(
+            color = Color(0xFFD4A862),
+            topLeft = Offset(x - s * 0.42f, y - s * 0.3f),
+            size = Size(s * 0.84f, s * 0.6f)
+        )
+
+        // Kabuk üst açık ton
+        drawOval(
+            color = Color(0xFFE8C88A).copy(alpha = 0.7f),
+            topLeft = Offset(x - s * 0.34f, y - s * 0.24f),
+            size = Size(s * 0.6f, s * 0.38f)
+        )
+
+        // Kabuk doku çizgileri (dikey ince çizgiler - gerçekçi kabuk dokusu)
+        val lineColor = Color(0xFFB8894A).copy(alpha = 0.4f)
+        for (i in -2..2) {
+            val offsetX = i * s * 0.08f
+            drawLine(
+                color = lineColor,
+                start = Offset(x + offsetX, y - s * 0.2f),
+                end = Offset(x + offsetX + s * 0.02f, y + s * 0.18f),
+                strokeWidth = 1.5f
+            )
+        }
+
+        // === FISTIK ÇATLAĞI (açık yarık) ===
+        // Koyu çatlak çizgisi
+        drawArc(
+            color = Color(0xFF3D2810),
+            startAngle = -20f,
+            sweepAngle = 40f,
+            useCenter = false,
+            topLeft = Offset(x - s * 0.3f, y - s * 0.05f),
+            size = Size(s * 0.6f, s * 0.2f),
+            style = Stroke(width = 3.5f)
+        )
+
+        // === YEŞİL İÇ KISIM (fıstığın kendisi - çatlaktan görünen) ===
+        drawOval(
+            color = Color(0xFF4CAF50),
+            topLeft = Offset(x - s * 0.2f, y - s * 0.02f),
+            size = Size(s * 0.4f, s * 0.18f)
+        )
+
+        // Yeşil iç parlama
+        drawOval(
+            color = Color(0xFF81C784).copy(alpha = 0.7f),
+            topLeft = Offset(x - s * 0.12f, y + s * 0.01f),
+            size = Size(s * 0.22f, s * 0.09f)
+        )
+
+        // Kabuk ışık yansıması (üst sol)
+        drawCircle(
+            color = Color.White.copy(alpha = 0.35f),
+            radius = s * 0.07f,
+            center = Offset(x - s * 0.18f, y - s * 0.16f)
+        )
+
+        // İkinci küçük parlama
+        drawCircle(
+            color = Color.White.copy(alpha = 0.2f),
+            radius = s * 0.04f,
+            center = Offset(x - s * 0.08f, y - s * 0.2f)
+        )
+    }
+}
+
+/**
+ * Ahşap zemin
  */
 private fun DrawScope.drawWoodenFloor(width: Float, height: Float) {
-    // Ana arka plan rengi
-    drawRect(
-        color = Color(0xFF8B6914),
-        size = Size(width, height)
-    )
+    drawRect(color = Color(0xFF8B6914), size = Size(width, height))
 
-    // Ahşap tahta şeritleri
     val plankCount = 8
     val plankHeight = height / plankCount
     for (i in 0 until plankCount) {
         val y = i * plankHeight
         val shade = if (i % 2 == 0) 0.05f else 0f
-
         drawRect(
             color = Color.Black.copy(alpha = shade),
             topLeft = Offset(0f, y),
             size = Size(width, plankHeight)
         )
-
-        // Tahta arası çizgi
         drawLine(
             color = Color(0xFF5C4033).copy(alpha = 0.4f),
             start = Offset(0f, y),
@@ -338,7 +403,6 @@ private fun DrawScope.drawWoodenFloor(width: Float, height: Float) {
         )
     }
 
-    // Ahşap damarları
     val grainColor = Color(0xFF6B4C12).copy(alpha = 0.15f)
     for (i in 0..30) {
         val startY = (height / 30) * i + sin(i * 0.5f) * 5f
@@ -350,7 +414,6 @@ private fun DrawScope.drawWoodenFloor(width: Float, height: Float) {
         )
     }
 
-    // Oyun alanı - hafif kenar gölgesi
     val padding = 20f
     drawRoundRect(
         color = Color(0xFF5C4033).copy(alpha = 0.5f),
@@ -359,62 +422,22 @@ private fun DrawScope.drawWoodenFloor(width: Float, height: Float) {
         cornerRadius = CornerRadius(16f, 16f),
         style = Stroke(width = 3f)
     )
-
-    // İç gölge efekti (üst ve sol)
-    drawLine(
-        color = Color.Black.copy(alpha = 0.1f),
-        start = Offset(padding, padding),
-        end = Offset(width - padding, padding),
-        strokeWidth = 6f
-    )
-    drawLine(
-        color = Color.Black.copy(alpha = 0.08f),
-        start = Offset(padding, padding),
-        end = Offset(padding, height - padding),
-        strokeWidth = 4f
-    )
 }
 
 /**
- * Toz partikülleri efekti
+ * Toz partikülleri
  */
 private fun DrawScope.drawDustParticles(width: Float, height: Float, progress: Float) {
-    val particleCount = 8
-    for (i in 0 until particleCount) {
-        val baseX = (width / particleCount) * i + 20f
-        val phase = (progress + i * 0.13f) % 1f
+    for (i in 0 until 6) {
+        val baseX = (width / 6) * i + 20f
+        val phase = (progress + i * 0.15f) % 1f
         val y = height * (1f - phase)
-        val alpha = sin(phase * PI.toFloat()) * 0.15f
-        val size = 2f + sin(i * 1.5f) * 1.5f
+        val alpha = sin(phase * PI.toFloat()) * 0.12f
 
         drawCircle(
             color = Color(0xFFDAA520).copy(alpha = alpha),
-            radius = size,
-            center = Offset(baseX + sin(phase * 3f) * 15f, y)
-        )
-    }
-}
-
-/**
- * Sparkle/parıltı efekti
- */
-private fun DrawScope.drawSparkle(x: Float, y: Float, alpha: Float, scale: Float, scaleX: Float) {
-    val sparkleSize = 4f * scale * scaleX
-    val sparkleColor = Color(0xFFFFD700).copy(alpha = alpha * 0.6f)
-
-    // 4 yönde parlama
-    val offsets = listOf(
-        Offset(x - 25f, y - 25f),
-        Offset(x + 20f, y - 15f),
-        Offset(x - 15f, y + 20f),
-        Offset(x + 25f, y + 15f)
-    )
-
-    offsets.forEach { offset ->
-        drawCircle(
-            color = sparkleColor,
-            radius = sparkleSize,
-            center = offset
+            radius = 2.5f,
+            center = Offset(baseX + sin(phase * 3f) * 12f, y)
         )
     }
 }

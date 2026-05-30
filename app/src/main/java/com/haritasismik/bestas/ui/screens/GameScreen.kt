@@ -1,6 +1,7 @@
 package com.haritasismik.bestas.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +30,8 @@ fun GameScreen(
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val message by viewModel.message.collectAsState()
+    val henekeTimeLeft by viewModel.henekeTimeLeft.collectAsState()
+    val isScattering by viewModel.isScattering.collectAsState()
 
     // Oyunu başlat
     LaunchedEffect(gameMode, stoneStyle) {
@@ -54,6 +58,11 @@ fun GameScreen(
                 gameState = gameState,
                 onBackClick = onBackToMenu
             )
+
+            // Heneke zamanlayıcı çubuğu
+            if (henekeTimeLeft > 0f) {
+                HenekeTimerBar(timeLeft = henekeTimeLeft)
+            }
 
             // Mesaj alanı
             AnimatedVisibility(
@@ -97,15 +106,36 @@ fun GameScreen(
                     },
                     onBoardClicked = { position ->
                         viewModel.onBoardClicked(position)
+                    },
+                    onSwipeStones = { stoneIds ->
+                        viewModel.onSwipeStones(stoneIds)
                     }
                 )
+
+                // Serpme animasyonu overlay
+                if (isScattering) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "🎲 Serpiliyor...",
+                            fontSize = 28.sp,
+                            color = GoldAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
 
             // Alt kontrol butonları
             GameBottomBar(
                 gameState = gameState,
                 onThrowClick = { viewModel.onThrowStone() },
-                onCatchClick = { viewModel.onCatchStone() }
+                onCatchClick = { viewModel.onCatchStone() },
+                onScatterClick = { viewModel.scatterStones() }
             )
         }
 
@@ -120,6 +150,28 @@ fun GameScreen(
     }
 }
 
+/**
+ * Heneke zamanlayıcı çubuğu - yeşilden kırmızıya değişir
+ */
+@Composable
+private fun HenekeTimerBar(timeLeft: Float) {
+    val color = when {
+        timeLeft > 0.5f -> Color(0xFF4CAF50)  // Yeşil
+        timeLeft > 0.25f -> Color(0xFFFF9800) // Turuncu
+        else -> Color(0xFFF44336)             // Kırmızı
+    }
+
+    LinearProgressIndicator(
+        progress = { timeLeft },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .padding(horizontal = 16.dp),
+        color = color,
+        trackColor = Color.Gray.copy(alpha = 0.3f)
+    )
+}
+
 @Composable
 private fun GameTopBar(
     gameState: GameState,
@@ -132,12 +184,10 @@ private fun GameTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Geri butonu
         TextButton(onClick = onBackClick) {
             Text("← Menü", color = CreamWhite)
         }
 
-        // Tur bilgisi
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -154,7 +204,6 @@ private fun GameTopBar(
             )
         }
 
-        // Skor
         Column(
             horizontalAlignment = Alignment.End
         ) {
@@ -176,26 +225,45 @@ private fun GameTopBar(
 private fun GameBottomBar(
     gameState: GameState,
     onThrowClick: () -> Unit,
-    onCatchClick: () -> Unit
+    onCatchClick: () -> Unit,
+    onScatterClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        // Serpme butonu (heneke seçilmeden önce aktif)
+        Button(
+            onClick = onScatterClick,
+            enabled = !gameState.isHenekeSelected && !gameState.isGameOver,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF795548),
+                contentColor = CreamWhite
+            ),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.height(48.dp)
+        ) {
+            Text("🎲 Serp", fontSize = 14.sp)
+        }
+
+        // Fırlat butonu
         Button(
             onClick = onThrowClick,
-            enabled = gameState.thrownStone == null && !gameState.isGameOver,
+            enabled = gameState.isHenekeSelected && gameState.thrownStone == null && !gameState.isGameOver,
             colors = ButtonDefaults.buttonColors(
                 containerColor = DarkWood,
                 contentColor = CreamWhite
             ),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.height(48.dp)
         ) {
-            Text("🪨 Fırlat", fontSize = 16.sp)
+            Text("🪨 Fırlat", fontSize = 14.sp)
         }
 
+        // Yakala butonu
         Button(
             onClick = onCatchClick,
             enabled = gameState.thrownStone != null && !gameState.isGameOver,
@@ -203,9 +271,10 @@ private fun GameBottomBar(
                 containerColor = GoldAccent,
                 contentColor = Color.Black
             ),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.height(48.dp)
         ) {
-            Text("✋ Yakala", fontSize = 16.sp)
+            Text("✋ Yakala", fontSize = 14.sp)
         }
     }
 }

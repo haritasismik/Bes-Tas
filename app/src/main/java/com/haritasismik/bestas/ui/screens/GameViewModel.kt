@@ -28,8 +28,15 @@ class GameViewModel : ViewModel() {
     private val _message = MutableStateFlow("")
     val message: StateFlow<String> = _message.asStateFlow()
 
+    private val _henekeTimeLeft = MutableStateFlow(0f)  // 0-1 arası (1=tam süre, 0=düştü)
+    val henekeTimeLeft: StateFlow<Float> = _henekeTimeLeft.asStateFlow()
+
+    private val _isScattering = MutableStateFlow(false)
+    val isScattering: StateFlow<Boolean> = _isScattering.asStateFlow()
+
     private var selectedStones = mutableListOf<Int>()
     private var gameMode = GameMode.LOCAL
+    private var henekeTimerJob: kotlinx.coroutines.Job? = null
 
     fun startGame(mode: GameMode, stoneStyle: StoneStyle) {
         gameMode = mode
@@ -107,6 +114,59 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Parmakla çizme sonucu - swipe ile taş toplama
+     * Kullanıcı parmağıyla taşların üzerinden geçti
+     */
+    fun onSwipeStones(stoneIds: List<Int>) {
+        val state = _gameState.value
+        if (state.isGameOver) return
+        if (state.thrownStone == null) return  // Heneke havada değilse swipe yok
+        if (gameMode == GameMode.VS_AI && !state.isPlayer1Turn) return
+
+        // Heneke'yi filtrele
+        val validIds = stoneIds.filter { it != state.henekeId }
+        if (validIds.isEmpty()) return
+
+        val groundCount = state.groundStones.size
+        val needed = minOf(state.currentRound.pickCount.coerceAtLeast(1), groundCount)
+
+        if (validIds.size >= needed) {
+            // Yeterli taş çizildi → topla
+            selectedStones.clear()
+            selectedStones.addAll(validIds.take(needed))
+            performPickUp()
+        } else {
+            _message.value = "${validIds.size}/$needed taş çizildi. Daha fazla çiz!"
+        }
+    }
+
+    /**
+     * Taşları serpme - butonla veya sallama ile
+     */
+    fun scatterStones() {
+        viewModelScope.launch {
+            _isScattering.value = true
+            _message.value = "Taşlar serpiliyor..."
+
+            // Kısa animasyon beklemesi
+            delay(600)
+
+            val state = _gameState.value
+            val newStones = engine.scatterStones()
+            _gameState.value = state.copy(
+                stones = newStones,
+                henekeId = null,
+                isHenekeSelected = false,
+                thrownStone = null,
+                stonesPickedThisTurn = 0
+            )
+
+            _isScattering.value = false
+            _message.value = "Heneke (kapçık) taşını seç! 🪨"
+        }
+    }
+
     fun onThrowStone() {
         val state = _gameState.value
         if (state.isGameOver) return
@@ -124,12 +184,53 @@ class GameViewModel : ViewModel() {
 
         val groundCount = newState.groundStones.size
         val needed = minOf(newState.currentRound.pickCount.coerceAtLeast(1), groundCount)
-        _message.value = "$needed taş seç! (Heneke düşmeden topla)"
+        _message.value = "Parmağınla $needed taşın üzerinden geç! ⏱️"
+
+        // Heneke zamanlayıcı başlat
+        startHenekeTimer()
+    }
+
+    /**
+     * Heneke zamanlayıcı - 2.5 saniye havada kalır, sonra düşer
+     */
+    private fun startHenekeTimer() {
+        henekeTimerJob?.cancel()
+        _henekeTimeLeft.value = 1f
+
+        henekeTimerJob = viewModelScope.launch {
+            val totalTime = GameEngine.HENEKE_FALL_TIME_MS
+            val interval = 50L
+            var elapsed = 0L
+
+            while (elapsed < totalTime) {
+                delay(interval)
+                elapsed += interval
+                _henekeTimeLeft.value = 1f - (elapsed.toFloat() / totalTime)
+            }
+
+            // Süre doldu - heneke düştü!
+            _henekeTimeLeft.value = 0f
+            val state = _gameState.value
+            if (state.thrownStone != null) {
+                _message.value = "Heneke düştü! ⏰ Sıra geçti."
+                handleFail()
+            }
+        }
+    }
+
+    /**
+     * Heneke zamanlayıcıyı durdur (yakalarken)
+     */
+    private fun stopHenekeTimer() {
+        henekeTimerJob?.cancel()
+        _henekeTimeLeft.value = 0f
     }
 
     fun onCatchStone() {
         val state = _gameState.value
         if (state.thrownStone == null) return
+
+        stopHenekeTimer()
 
         val (newState, result) = engine.catchHeneke(state)
 

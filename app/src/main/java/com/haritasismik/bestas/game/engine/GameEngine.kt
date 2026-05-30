@@ -1,6 +1,8 @@
 package com.haritasismik.bestas.game.engine
 
 import com.haritasismik.bestas.game.models.*
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -22,11 +24,12 @@ class GameEngine {
     companion object {
         const val BOARD_WIDTH = 1000f
         const val BOARD_HEIGHT = 1400f
-        const val STONE_SIZE = 60f
-        const val TOUCH_RADIUS = 70f       // Taşa dokunma yarıçapı
-        const val PROXIMITY_LIMIT = 90f    // Yakınlık limiti - bundan yakınsa dokunma riski var
-        val SCATTER_AREA_X = 200f..800f
-        val SCATTER_AREA_Y = 600f..1100f
+        const val STONE_SIZE = 95f          // Büyütüldü (60 → 95)
+        const val TOUCH_RADIUS = 110f       // Dokunma yarıçapı büyütüldü
+        const val PROXIMITY_LIMIT = 130f    // Yakınlık limiti büyütüldü
+        const val HENEKE_FALL_TIME_MS = 2500L  // Heneke havada kalma süresi (ms)
+        val SCATTER_AREA_X = 120f..880f
+        val SCATTER_AREA_Y = 450f..1150f
     }
 
     /**
@@ -61,22 +64,38 @@ class GameEngine {
     }
 
     /**
-     * Taşları rastgele yere serpiştirir - birbirinden minimum mesafede
+     * Taşları fiziksel olarak serpiştirir - doğal dağılım, kenara çarpma
+     * Taşlar minimum mesafe ile dağılır, kenarlara yaklaşırsa geri seker
      */
     fun scatterStones(): List<Stone> {
         val positions = mutableListOf<Position>()
-        val minDistance = STONE_SIZE * 1.2f  // Minimum mesafe (çakışmasın)
+        val minDistance = STONE_SIZE * 1.5f  // Minimum mesafe (büyük taşlar için)
 
         for (i in 0 until 5) {
             var attempts = 0
             var pos: Position
             do {
-                pos = Position(
-                    x = Random.nextFloat() * (SCATTER_AREA_X.endInclusive - SCATTER_AREA_X.start) + SCATTER_AREA_X.start,
-                    y = Random.nextFloat() * (SCATTER_AREA_Y.endInclusive - SCATTER_AREA_Y.start) + SCATTER_AREA_Y.start
-                )
+                // Rastgele bir yön ve hız ile "fırlat"
+                val centerX = BOARD_WIDTH / 2
+                val centerY = (SCATTER_AREA_Y.start + SCATTER_AREA_Y.endInclusive) / 2
+
+                // Merkeze göre rastgele yönde dağıt
+                val angle = Random.nextFloat() * 2f * Math.PI.toFloat()
+                val distance = Random.nextFloat() * 250f + 100f
+
+                var x = centerX + cos(angle) * distance
+                var y = centerY + sin(angle) * distance
+
+                // Kenara çarpma - geri sekme
+                val margin = STONE_SIZE * 0.8f
+                if (x < SCATTER_AREA_X.start + margin) x = SCATTER_AREA_X.start + margin + Random.nextFloat() * 50f
+                if (x > SCATTER_AREA_X.endInclusive - margin) x = SCATTER_AREA_X.endInclusive - margin - Random.nextFloat() * 50f
+                if (y < SCATTER_AREA_Y.start + margin) y = SCATTER_AREA_Y.start + margin + Random.nextFloat() * 50f
+                if (y > SCATTER_AREA_Y.endInclusive - margin) y = SCATTER_AREA_Y.endInclusive - margin - Random.nextFloat() * 50f
+
+                pos = Position(x, y)
                 attempts++
-            } while (attempts < 50 && positions.any { distanceBetween(it, pos) < minDistance })
+            } while (attempts < 80 && positions.any { distanceBetween(it, pos) < minDistance })
 
             positions.add(pos)
         }
